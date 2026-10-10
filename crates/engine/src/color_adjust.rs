@@ -48,17 +48,18 @@ impl ColorAdjust {
         }
 
         let (w, h) = (img.width(), img.height());
-        let lab: Vec<[f32; 3]> = img.data().chunks_exact(4).map(|p| to_oklab([p[0], p[1], p[2]])).collect();
-        let chroma: Vec<f32> = lab.iter().map(|c| (c[1] * c[1] + c[2] * c[2]).sqrt()).collect();
+        use rayon::prelude::*;
+        let lab: Vec<[f32; 3]> = img.data().par_chunks(4).map(|p| to_oklab([p[0], p[1], p[2]])).collect();
+        let chroma: Vec<f32> = lab.par_iter().map(|c| (c[1] * c[1] + c[2] * c[2]).sqrt()).collect();
         let global_mean = chroma.iter().sum::<f32>() / chroma.len() as f32;
         let regions = self.color_regions.clamp(1.0, 10.0);
         let local = box_blur(&chroma, w, h, ((w.max(h) as f32 / (16.0 * regions)).round() as usize).max(1));
 
-        for (i, px) in img.data_mut().chunks_exact_mut(4).enumerate() {
+        img.data_mut().par_chunks_mut(4).enumerate().for_each(|(i, px)| {
             let [l, a, b] = lab[i];
             let c = chroma[i];
-            if c == 0.0 && !lab[i][0].is_finite() {
-                continue;
+            if !lab[i][0].is_finite() {
+                return;
             }
             let ad = (global_mean / local[i].max(1e-6)).clamp(0.5, 2.0);
             let mut c2 = c * (1.0 + adaptive * (ad - 1.0));
@@ -69,7 +70,7 @@ impl ColorAdjust {
             px[0] = rgb[0].max(0.0);
             px[1] = rgb[1].max(0.0);
             px[2] = rgb[2].max(0.0);
-        }
+        });
         Ok(())
     }
 }

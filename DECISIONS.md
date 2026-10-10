@@ -31,3 +31,6 @@ The guided filter (He et al. 2010), ported from the author's Limestone repo, now
 All of Limestone's stages are ported into `crates/engine/src/limestone.rs` and selected with `Style::Limestone` (the Model switch in the UI). The default engine is unchanged. The 21 Limestone factory presets are kept, renamed to our own names (for example "Spicify" becomes "Vivid Punch"), and "Topaz" is removed from their descriptions. The values are converted to our slider convention in `apps/desktop/src/presets.ts`. Presets switch the model on.
 
 Risk to note: Limestone describes its presets as reverse-engineered from Topaz Adjust 4. Renaming them does not remove that origin. Before any public release, decide whether these values can be used.
+
+## D11 — CPU parallelism and measured baseline (2026-10-10)
+Rayon is used for the per-pixel loops, the box blur (rows and columns in parallel), the colour stage and exposure. sRGB decode uses an exact 256-entry table. Reason: the look pipeline took 2.0 s of 2.3 s on the 8.8 MP test image, single-threaded. Result: 1.58 s total. Tile rendering and GPU are not done.

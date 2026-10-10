@@ -107,3 +107,16 @@ Real-photo check: the combined CLI command (`--ev 0.2 --adaptive 0.6 --details 1
 ## Basic exposure and colour regions (2026-10-10)
 
 Basic exposure tests: neutral identity, contrast spreads tones, black boost lifts shadows only, NaN rejection. Engine total: 60 tests. Workspace total with the desktop backend: 60 engine, 4 desktop backend, 3 FFI, all passing.
+
+## Performance, CPU (2026-10-10)
+
+Method: release build (`cargo build --release -p render-cli`), wall clock around one run, on the 4096x2160 aerial photo (8.8 MP). Machine: this Mac (Apple silicon, 10 cores). Single runs, so expect noise of about 10 to 20 percent.
+
+| Run | Before Rayon | After Rayon (box blur, colour, exposure, exact sRGB LUT decode) |
+|---|---|---|
+| all stages on | 2.81 s | 1.58 s |
+| look only, stage timer | look 2.0 s, decode 0.08 s, encode 0.04 s, save 0.06 s | not re-timed |
+
+Benchmark command: `time ./target/release/render-cli in.png out.png --ev 0.2 --adaptive 0.6 --details 1.3 --saturation 1.15 --warmth 0.3 --vignette 0.4 --grain 0.2`
+
+Not measured yet: the 960 px preview inside the desktop app (expected about a tenth of the full-size time, unmeasured), memory peak, tile-based rendering, and GPU. The spec's targets (for example 200 ms preview at 24 MP) are goals, not results.

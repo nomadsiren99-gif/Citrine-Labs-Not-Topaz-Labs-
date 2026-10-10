@@ -1,3 +1,5 @@
+use rayon::prelude::*;
+
 use crate::buffer::{EngineError, LinearImage};
 
 /// Exposure is clamped to +/-10 EV. Out-of-range values are clamped, not rejected.
@@ -10,11 +12,11 @@ pub fn apply_exposure(img: &mut LinearImage, ev: f32) -> Result<(), EngineError>
         return Err(EngineError::NonFiniteParameter("exposure ev"));
     }
     let gain = 2f32.powf(ev.clamp(-MAX_EV, MAX_EV));
-    for px in img.data_mut().chunks_exact_mut(4) {
+    img.data_mut().par_chunks_mut(4).for_each(|px| {
         px[0] *= gain;
         px[1] *= gain;
         px[2] *= gain;
-    }
+    });
     Ok(())
 }
 

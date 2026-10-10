@@ -229,6 +229,37 @@ export default function App() {
       .catch((e) => setStatus(String(e)));
   };
 
+  // Project file: versioned session (source path, every control, brush strokes, model).
+  const PROJECT_SCHEMA = 1;
+
+  const saveProject = async () => {
+    const picked = await save({ defaultPath: "session.photoproj.json", filters: [{ name: "Project", extensions: ["json"] }] });
+    if (typeof picked !== "string") return;
+    const doc = { schemaVersion: PROJECT_SCHEMA, app: "photo-editor", source: path, sliders };
+    invoke("write_text_file", { path: picked, contents: JSON.stringify(doc, null, 2) })
+      .then(() => setStatus(`Project saved to ${picked}`))
+      .catch((e) => setStatus(String(e)));
+  };
+
+  const loadProject = async () => {
+    const picked = await open({ multiple: false, filters: [{ name: "Project", extensions: ["json"] }] });
+    if (typeof picked !== "string") return;
+    try {
+      const doc = JSON.parse(await invoke<string>("read_text_file", { path: picked }));
+      if (doc.schemaVersion !== PROJECT_SCHEMA) {
+        setStatus(`Unsupported project version ${doc.schemaVersion}`);
+        return;
+      }
+      commit(sliders);
+      setSliders({ ...NEUTRAL, ...doc.sliders });
+      if (typeof doc.source === "string" && doc.source) setPath(doc.source);
+      setPreset("Custom");
+      setStatus(`Project loaded from ${picked}`);
+    } catch (e) {
+      setStatus(String(e));
+    }
+  };
+
   const loadPreset = async () => {
     const picked = await open({ multiple: false, filters: [{ name: "Preset", extensions: ["json"] }] });
     if (typeof picked !== "string") return;
@@ -281,6 +312,8 @@ export default function App() {
         <input className="search" placeholder="Search presets" value={presetQuery} onChange={(e) => setPresetQuery(e.target.value)} />
         <button onClick={savePreset}>Save preset...</button>
         <button onClick={loadPreset}>Load preset...</button>
+        <button onClick={saveProject}>Save project...</button>
+        <button onClick={loadProject}>Open project...</button>
         <h2>Snapshots</h2>
         <button onClick={saveSnapshot}>Take snapshot</button>
         {snapshots.map((snap, i) => (

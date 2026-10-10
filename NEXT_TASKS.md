@@ -22,3 +22,5 @@ Ordered. Stop at the first item that is blocked and report it.
    - Do not claim success until the PSD round trip passes.
 7. Decide with the user whether to run `git init` and make the first commit.
 8. Reference: if a lawfully obtained copy of the newer Topaz product is provided, run it only in an isolated Windows VM and record the About dialog version.
+
+- Done: project save and open (versioned JSON, schemaVersion 1). Next: a tested migration path for future schema versions, and tile-based rendering.

@@ -1,5 +1,7 @@
 use std::fmt;
 
+use rayon::prelude::*;
+
 use crate::color::{linear_to_srgb, srgb_to_linear};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -65,33 +67,28 @@ impl LinearImage {
                 actual: rgba.len(),
             });
         }
-        let data = rgba
-            .chunks_exact(4)
-            .flat_map(|p| {
-                [
-                    srgb_to_linear(p[0] as f32 / 255.0),
-                    srgb_to_linear(p[1] as f32 / 255.0),
-                    srgb_to_linear(p[2] as f32 / 255.0),
-                    p[3] as f32 / 255.0,
-                ]
-            })
-            .collect();
+        // Exact: an 8-bit input has only 256 values, so the table is the same as the formula.
+        let lut: Vec<f32> = (0..256).map(|v| srgb_to_linear(v as f32 / 255.0)).collect();
+        let mut data = vec![0.0f32; rgba.len()];
+        data.par_chunks_mut(4).zip(rgba.par_chunks(4)).for_each(|(out, p)| {
+            out[0] = lut[p[0] as usize];
+            out[1] = lut[p[1] as usize];
+            out[2] = lut[p[2] as usize];
+            out[3] = p[3] as f32 / 255.0;
+        });
         Ok(Self { width, height, data })
     }
 
     /// Encodes to 8-bit sRGB RGBA. Non-finite values become 0; out-of-range values are clamped.
     pub fn to_srgb8(&self) -> Vec<u8> {
-        self.data
-            .chunks_exact(4)
-            .flat_map(|p| {
-                [
-                    encode_channel(p[0]),
-                    encode_channel(p[1]),
-                    encode_channel(p[2]),
-                    to_unit_u8(p[3]),
-                ]
-            })
-            .collect()
+        let mut out = vec![0u8; self.data.len()];
+        out.par_chunks_mut(4).zip(self.data.par_chunks(4)).for_each(|(o, p)| {
+            o[0] = encode_channel(p[0]);
+            o[1] = encode_channel(p[1]);
+            o[2] = encode_channel(p[2]);
+            o[3] = to_unit_u8(p[3]);
+        });
+        out
     }
 
     pub fn width(&self) -> usize {

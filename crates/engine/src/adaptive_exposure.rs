@@ -114,20 +114,23 @@ pub(crate) fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
 
 /// Separable box blur with clamp-to-edge borders. Window is 2r+1 samples.
 pub(crate) fn box_blur(src: &[f32], w: usize, h: usize, r: usize) -> Vec<f32> {
+    use rayon::prelude::*;
     let mut rows = vec![0.0f32; w * h];
-    for y in 0..h {
-        blur_1d(&src[y * w..(y + 1) * w], &mut rows[y * w..(y + 1) * w], r);
-    }
+    rows.par_chunks_mut(w).zip(src.par_chunks(w)).for_each(|(dst, s)| blur_1d(s, dst, r));
+    // Columns are independent: blur each in parallel, then scatter back.
+    let cols: Vec<Vec<f32>> = (0..w)
+        .into_par_iter()
+        .map(|x| {
+            let col: Vec<f32> = (0..h).map(|y| rows[y * w + x]).collect();
+            let mut out = vec![0.0f32; h];
+            blur_1d(&col, &mut out, r);
+            out
+        })
+        .collect();
     let mut out = vec![0.0f32; w * h];
-    let mut col = vec![0.0f32; h];
-    let mut col_out = vec![0.0f32; h];
-    for x in 0..w {
-        for y in 0..h {
-            col[y] = rows[y * w + x];
-        }
-        blur_1d(&col, &mut col_out, r);
-        for y in 0..h {
-            out[y * w + x] = col_out[y];
+    for (x, col) in cols.iter().enumerate() {
+        for (y, v) in col.iter().enumerate() {
+            out[y * w + x] = *v;
         }
     }
     out
