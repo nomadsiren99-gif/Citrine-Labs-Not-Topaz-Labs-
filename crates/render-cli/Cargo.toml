@@ -1,0 +1,9 @@
+[package]
+name = "render-cli"
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+
+[dependencies]
+engine = { path = "../engine" }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
