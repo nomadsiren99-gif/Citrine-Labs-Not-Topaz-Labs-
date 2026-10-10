@@ -10,6 +10,9 @@ use engine::details::Details;
 use engine::finishing::Finishing;
 use engine::local::{Stroke, StrokeKind};
 use engine::noise::Denoise;
+use engine::limestone_exact::{
+    image_buffer::RgbImageF32, params::AdjustParams, pipeline::process_image, preset::get_factory_presets, preset::Preset,
+};
 use engine::{apply_look, BasicExposure, LinearImage, Look, Style};
 use image::{imageops::FilterType, DynamicImage, ImageFormat, RgbaImage};
 use serde::Deserialize;
@@ -247,6 +250,49 @@ fn export_image(path: String, out_path: String, sliders: Sliders) -> Result<(), 
     out.save(&out_path).map_err(|e| format!("cannot write image: {e}"))
 }
 
+/// Limestone's exact factory presets (names and parameters as in the author's repo).
+#[tauri::command]
+fn limestone_presets() -> Vec<Preset> {
+    get_factory_presets()
+}
+
+/// Runs Limestone's exact pipeline on RGB. Alpha is kept from the source image.
+fn limestone_render(src: &RgbaImage, params: &AdjustParams) -> RgbaImage {
+    let rgb = image::DynamicImage::ImageRgba8(src.clone()).to_rgb8();
+    let input = RgbImageF32::from_rgb8(&rgb);
+    let out = process_image(&input, params).to_rgb8();
+    let mut result = RgbaImage::new(src.width(), src.height());
+    for (x, y, px) in result.enumerate_pixels_mut() {
+        let c = out.get_pixel(x, y).0;
+        *px = image::Rgba([c[0], c[1], c[2], src.get_pixel(x, y).0[3]]);
+    }
+    result
+}
+
+/// Exact Limestone preview (downscaled to the preview size, as in Limestone's own live preview).
+#[tauri::command]
+fn render_limestone_preview(path: String, params: AdjustParams) -> Result<String, String> {
+    let full = load(&path)?;
+    let scale = (PREVIEW_MAX_SIDE as f32 / full.width().max(full.height()) as f32).min(1.0);
+    let small = if scale < 1.0 {
+        let (w, h) = ((full.width() as f32 * scale).round() as u32, (full.height() as f32 * scale).round() as u32);
+        image::imageops::resize(&full, w.max(1), h.max(1), FilterType::Triangle)
+    } else {
+        full
+    };
+    let out = limestone_render(&small, &params);
+    let mut buf = Cursor::new(Vec::new());
+    DynamicImage::ImageRgba8(out).write_to(&mut buf, ImageFormat::Png).map_err(|e| e.to_string())?;
+    Ok(STANDARD.encode(buf.into_inner()))
+}
+
+/// Exact Limestone export at full resolution.
+#[tauri::command]
+fn export_limestone(path: String, out_path: String, params: AdjustParams) -> Result<(), String> {
+    let full = load(&path)?;
+    limestone_render(&full, &params).save(&out_path).map_err(|e| format!("cannot write image: {e}"))
+}
+
 /// Writes a preset (JSON text) to a path the user chose in the save dialog.
 #[tauri::command]
 fn write_text_file(path: String, contents: String) -> Result<(), String> {
@@ -264,7 +310,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![render_preview, export_image, write_text_file, read_text_file])
+        .invoke_handler(tauri::generate_handler![
+            render_preview, export_image, write_text_file, read_text_file,
+            limestone_presets, render_limestone_preview, export_limestone
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -325,5 +374,24 @@ mod tests {
         let s: Sliders = serde_json::from_str(r#"{"warmth": 0.4}"#).unwrap();
         assert_eq!(s.warmth, 0.4);
         assert_eq!(s.saturation, 1.0);
+    }
+
+    #[test]
+    fn limestone_neutral_is_identical() {
+        let src = RgbaImage::from_fn(40, 20, |x, y| image::Rgba([(x * 6) as u8, (y * 12) as u8, 90, 200]));
+        let out = limestone_render(&src, &AdjustParams::default());
+        assert_eq!(out, src, "neutral Limestone render must not change pixels or alpha");
+    }
+
+    #[test]
+    fn every_limestone_factory_preset_renders() {
+        let src = RgbaImage::from_fn(64, 48, |x, y| image::Rgba([(x * 3) as u8, (y * 5) as u8, 120, 255]));
+        let presets = limestone_presets();
+        assert_eq!(presets.len(), 21);
+        for p in presets {
+            let out = limestone_render(&src, &p.params);
+            assert_eq!(out.dimensions(), (64, 48), "preset {}", p.name);
+            assert!(out.pixels().all(|px| px.0[3] == 255), "alpha changed in {}", p.name);
+        }
     }
 }

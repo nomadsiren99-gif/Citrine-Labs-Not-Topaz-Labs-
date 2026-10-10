@@ -12,6 +12,7 @@ pub mod exposure;
 pub mod finishing;
 pub mod guided;
 pub mod limestone;
+pub mod limestone_exact;
 pub mod local;
 pub mod noise;
 pub mod pipeline;

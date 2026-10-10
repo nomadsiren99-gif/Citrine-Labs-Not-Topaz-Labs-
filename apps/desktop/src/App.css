@@ -35,3 +35,13 @@ select { background: #0f1014; color: inherit; border: 1px solid #333; border-rad
 .viewport.side img { max-width: 49%; max-height: 100%; object-fit: contain; }
 .search { width: 100%; box-sizing: border-box; padding: 6px; margin: 4px 0; background: #0f1014; color: inherit; border: 1px solid #333; border-radius: 4px; }
 .cat { display: block; font-size: 11px; opacity: 0.6; font-style: normal; }
+.modes { display: flex; gap: 4px; margin-bottom: 8px; }
+.modes button { flex: 1; }
+.chan { display: flex; gap: 4px; margin: 4px 0; }
+.chan button { padding: 2px 8px; font-size: 12px; background: #2a2d36; color: inherit; border: 0; border-radius: 3px; }
+.chan button.sel { background: #00a6d6; color: #001018; }
+.histogram { display: block; width: 100%; height: 60px; background: #0a0b0d; }
+.curvebox { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.curve { display: block; background: #0a0b0d; border: 1px solid #2a2d36; cursor: crosshair; touch-action: none; }
+.curvebar { display: flex; justify-content: space-between; width: 256px; font-size: 12px; }
+.curvebar button { padding: 2px 8px; }

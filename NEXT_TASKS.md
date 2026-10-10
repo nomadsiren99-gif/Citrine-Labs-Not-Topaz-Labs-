@@ -24,3 +24,7 @@ Ordered. Stop at the first item that is blocked and report it.
 8. Reference: if a lawfully obtained copy of the newer Topaz product is provided, run it only in an isolated Windows VM and record the About dialog version.
 
 - Done: project save and open (versioned JSON, schemaVersion 1). Next: a tested migration path for future schema versions, and tile-based rendering.
+
+- Done: exact Limestone port (D12), Limestone mode in the app with exact ranges, presets, a points-based curve editor and an RGB and luminance histogram with channel toggles.
+- Open: Ours mode still uses the three-slider curve. Undo covers both modes. Snapshots are not in the new UI yet.
+- Open: check the exact pipeline in the window (not yet tested by hand); check the curve interaction against Lightroom/Photoshop feel.

@@ -34,3 +34,8 @@ Risk to note: Limestone describes its presets as reverse-engineered from Topaz A
 
 ## D11 — CPU parallelism and measured baseline (2026-10-10)
 Rayon is used for the per-pixel loops, the box blur (rows and columns in parallel), the colour stage and exposure. sRGB decode uses an exact 256-entry table. Reason: the look pipeline took 2.0 s of 2.3 s on the 8.8 MP test image, single-threaded. Result: 1.58 s total. Tile rendering and GPU are not done.
+
+## D12 — Exact Limestone port (2026-10-11)
+The author's Limestone `adjust-core` crate is copied into `crates/engine/src/limestone_exact/` with only its `crate::` paths rewritten. Its parameters, defaults, presets (names as in the repo, Topaz-derived ones included, as the author asked), pipeline order and pixel handling are used unchanged. Pixels are read as value/255 with no sRGB decode, and written back as value*255+0.5, as in the source. The desktop app has a Limestone mode with its exact ranges and presets. Our own engine stays available as the Ours mode.
+
+Risk: the Limestone presets are derived from Topaz Adjust 4 looks (see D10). The author has asked to keep them.
