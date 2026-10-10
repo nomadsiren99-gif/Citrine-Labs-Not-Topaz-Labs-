@@ -1,0 +1,12 @@
+[package]
+name = "engine-ffi"
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+
+[lib]
+name = "engine_ffi"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+engine = { path = "../engine" }

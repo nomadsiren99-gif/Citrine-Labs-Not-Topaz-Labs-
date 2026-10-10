@@ -10,6 +10,8 @@ photo-editor/
       src/color.rs           sRGB <-> linear transfer functions
       src/buffer.rs          LinearImage: f32 RGBA, linear light, straight alpha
       src/exposure.rs        global exposure, gain = 2^EV, clamped to +/-10 EV
+    ffi/                     engine-ffi: C ABI (pe_apply_exposure_rgba8), staticlib + cdylib
+      tests/c/harness.c      C-side ABI check
     render-cli/              thin CLI over engine; PNG/JPEG in and out
 ```
 

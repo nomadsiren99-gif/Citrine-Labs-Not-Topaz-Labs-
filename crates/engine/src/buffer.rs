@@ -7,6 +7,7 @@ pub enum EngineError {
     InvalidDimensions { width: usize, height: usize },
     LengthMismatch { expected: usize, actual: usize },
     NonFiniteParameter(&'static str),
+    InvalidParameter(&'static str),
 }
 
 impl fmt::Display for EngineError {
@@ -19,6 +20,7 @@ impl fmt::Display for EngineError {
                 write!(f, "buffer length {actual}, expected {expected}")
             }
             Self::NonFiniteParameter(name) => write!(f, "parameter `{name}` is not finite"),
+            Self::InvalidParameter(what) => write!(f, "invalid parameter: {what}"),
         }
     }
 }

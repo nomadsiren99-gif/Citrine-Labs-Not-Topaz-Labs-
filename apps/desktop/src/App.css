@@ -1,0 +1,37 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #15161a; color: #e6e6e6; }
+body { margin: 0; }
+.app { display: grid; grid-template-columns: 200px 1fr 280px; height: 100vh; }
+.left, .right { background: #1d1f25; padding: 12px; overflow-y: auto; }
+.left button, .right > button { display: block; width: 100%; margin: 4px 0; padding: 6px; background: #2a2d36; color: inherit; border: 0; border-radius: 4px; text-align: left; }
+.left button.sel { background: #00a6d6; color: #001018; }
+.center { display: flex; flex-direction: column; padding: 12px; gap: 8px; min-width: 0; }
+.toolbar { display: flex; gap: 8px; }
+.toolbar input { flex: 1; padding: 6px; background: #0f1014; color: inherit; border: 1px solid #333; border-radius: 4px; }
+.viewport { flex: 1; display: flex; align-items: center; justify-content: center; background: #0a0b0d; min-height: 0; }
+.viewport img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.status { margin: 0; font-size: 13px; opacity: 0.8; }
+.slider { display: block; margin: 10px 0; }
+.slider span { display: flex; justify-content: space-between; font-size: 13px; }
+.slider em { font-style: normal; opacity: 0.7; }
+.slider input { width: 100%; }
+@media (max-width: 800px) { .app { grid-template-columns: 1fr; } }
+.spacer { flex: 1; }
+.histogram { height: 60px; width: 100%; background: #0a0b0d; }
+.viewport { overflow: auto; }
+.viewport.zoom-fit img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.section { border-bottom: 1px solid #2a2d36; padding: 4px 0; }
+.section header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 6px 0; font-size: 14px; }
+.section header button { padding: 2px 8px; font-size: 12px; }
+.check { display: flex; gap: 6px; align-items: center; font-size: 13px; margin: 6px 0; }
+.colors label { display: flex; justify-content: space-between; font-size: 13px; margin: 4px 0; }
+.small { font-size: 12px; display: flex; align-items: center; gap: 4px; }
+.small input { width: 80px; }
+.painting { cursor: crosshair; }
+.curve { display: block; margin: 8px 0; }
+select { background: #0f1014; color: inherit; border: 1px solid #333; border-radius: 4px; padding: 4px; }
+.viewport.split, .viewport.side { position: relative; flex-direction: row; gap: 4px; }
+.viewport.split .layer { position: absolute; max-width: 100%; max-height: 100%; object-fit: contain; }
+.viewport.split .wipe { position: absolute; bottom: 8px; left: 10%; width: 80%; }
+.viewport.side img { max-width: 49%; max-height: 100%; object-fit: contain; }
+.search { width: 100%; box-sizing: border-box; padding: 6px; margin: 4px 0; background: #0f1014; color: inherit; border: 1px solid #333; border-radius: 4px; }
+.cat { display: block; font-size: 11px; opacity: 0.6; font-style: normal; }
