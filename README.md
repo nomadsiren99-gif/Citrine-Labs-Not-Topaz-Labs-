@@ -1,4 +1,4 @@
-# Photo Editor (filter rebuild)
+# Citrine Labs (Not Topaz Labs)
 
 A photo-enhancement engine and desktop app written in Rust and TypeScript.
 It applies exposure, local contrast, detail, colour, noise and curve adjustments
