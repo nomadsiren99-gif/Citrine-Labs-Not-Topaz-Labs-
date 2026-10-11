@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = ["crates/engine", "crates/ffi", "crates/render-cli", "crates/quartz-core", "apps/desktop/src-tauri"]
+
+# Release profile lives at the workspace root (Cargo ignores it in members).
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

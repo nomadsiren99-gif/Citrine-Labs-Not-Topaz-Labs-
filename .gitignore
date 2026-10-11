@@ -1,0 +1,10 @@
+target/
+plugins/photoshop-native/build/
+apps/desktop/node_modules/
+apps/desktop/dist/
+quality/**/*.png
+quality/**/*.jpg
+quality/**/*.jpeg
+quality/**/*.DS_Store
+quality/**/.DS_Store
+.DS_Store
