@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/engine", "crates/ffi", "crates/render-cli", "crates/quartz-core", "apps/desktop/src-tauri"]
+members = ["crates/engine", "crates/ffi", "crates/plugin-ffi", "crates/render-cli", "crates/quartz-core", "apps/desktop/src-tauri"]
 
 # Release profile lives at the workspace root (Cargo ignores it in members).
 [profile.release]

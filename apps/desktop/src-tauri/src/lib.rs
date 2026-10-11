@@ -223,7 +223,29 @@ impl Sliders {
     }
 }
 
+/// Hand-off format shared with the Photoshop plug-in: magic "CTRN", width and height as u32
+/// little-endian, then tightly packed RGB8 rows. Raw on purpose: the plug-in writes it without codecs.
+const RAW_MAGIC: &[u8; 4] = b"CTRN";
+
+fn read_raw(path: &str) -> Result<RgbaImage, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("cannot read file: {e}"))?;
+    if bytes.len() < 12 || &bytes[..4] != RAW_MAGIC {
+        return Err("not a Citrine hand-off file".into());
+    }
+    let w = u32::from_le_bytes(bytes[4..8].try_into().unwrap());
+    let h = u32::from_le_bytes(bytes[8..12].try_into().unwrap());
+    let body = &bytes[12..];
+    if w == 0 || h == 0 || body.len() != (w as usize) * (h as usize) * 3 {
+        return Err("hand-off file size does not match its header".into());
+    }
+    let rgba: Vec<u8> = body.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect();
+    RgbaImage::from_raw(w, h, rgba).ok_or_else(|| "bad hand-off dimensions".to_string())
+}
+
 fn load(path: &str) -> Result<RgbaImage, String> {
+    if path.to_ascii_lowercase().ends_with(".ctrn") {
+        return read_raw(path);
+    }
     // EXIF orientation is applied on load, matching the CLI.
     let err = |e: image::ImageError| format!("cannot open image: {e}");
     let mut decoder = image::ImageReader::open(path).map_err(|e| format!("cannot open image: {e}"))?
@@ -377,6 +399,31 @@ fn render_quartz_preview(path: String, params: AdjustParams, side: Option<u32>) 
     Ok(STANDARD.encode(buf.into_inner()))
 }
 
+/// Full-resolution Quartz output for the zoom views, kept for the last image and settings. Panning
+/// crops from it, so only a settings change renders the whole picture again.
+static ZOOM_QUARTZ: std::sync::Mutex<Option<(String, String, RgbaImage)>> = std::sync::Mutex::new(None);
+
+/// Full-resolution Quartz crop `(x, y, w, h)` for the zoom views, as a base64 PNG.
+#[tauri::command]
+fn render_quartz_crop(path: String, params: AdjustParams, x: u32, y: u32, w: u32, h: u32) -> Result<String, String> {
+    let key = serde_json::to_string(&params).map_err(|e| e.to_string())?;
+    let mut cache = ZOOM_QUARTZ.lock().map_err(|e| e.to_string())?;
+    let fresh = cache.as_ref().map(|(p, k, _)| p != &path || k != &key).unwrap_or(true);
+    if fresh {
+        let full = load(&path)?;
+        *cache = Some((path.clone(), key, quartz_render(&full, &params)));
+    }
+    let (_, _, out) = cache.as_ref().expect("cache filled above");
+    let x = x.min(out.width().saturating_sub(1));
+    let y = y.min(out.height().saturating_sub(1));
+    let w = w.min(out.width() - x).max(1);
+    let h = h.min(out.height() - y).max(1);
+    let crop = image::imageops::crop_imm(out, x, y, w, h).to_image();
+    let mut buf = Cursor::new(Vec::new());
+    DynamicImage::ImageRgba8(crop).write_to(&mut buf, ImageFormat::Png).map_err(|e| e.to_string())?;
+    Ok(STANDARD.encode(buf.into_inner()))
+}
+
 /// Exact Quartz export at full resolution.
 #[tauri::command]
 fn export_quartz(path: String, out_path: String, params: AdjustParams) -> Result<(), String> {
@@ -396,17 +443,70 @@ fn read_text_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("cannot read file: {e}"))
 }
 
+/// File opened from Finder or Photoshop before the window listens for it. The window asks for it
+/// on start, since an open event at launch can fire before the page is ready.
+use tauri::Manager;
+
+#[derive(Default)]
+struct PendingOpen(std::sync::Mutex<Option<String>>);
+
+/// Returns the file opened at launch, once.
+#[tauri::command]
+fn take_pending_open(state: tauri::State<PendingOpen>) -> Option<String> {
+    state.0.lock().ok()?.take()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(PendingOpen::default())
         .invoke_handler(tauri::generate_handler![
             render_preview, export_image, write_text_file, read_text_file, image_size, render_crop,
-            quartz_presets, render_quartz_preview, export_quartz
+            quartz_presets, render_quartz_preview, render_quartz_crop, export_quartz, take_pending_open
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // A file opened from Finder or Photoshop: tell the window to load it.
+            if let tauri::RunEvent::Opened { urls } = event {
+                for url in urls {
+                    if let Ok(p) = url.to_file_path() {
+                        let path = p.to_string_lossy().to_string();
+                        if let Ok(mut pending) = app.state::<PendingOpen>().0.lock() {
+                            *pending = Some(path.clone());
+                        }
+                        let _ = tauri::Emitter::emit(app, "open-file", path);
+                    }
+                }
+            }
+        });
+}
+
+#[cfg(test)]
+mod handoff_tests {
+    use super::*;
+
+    fn write_raw(path: &str, img: &RgbaImage) -> Result<(), String> {
+        let mut out = Vec::with_capacity(12 + (img.width() * img.height() * 3) as usize);
+        out.extend_from_slice(RAW_MAGIC);
+        out.extend_from_slice(&img.width().to_le_bytes());
+        out.extend_from_slice(&img.height().to_le_bytes());
+        out.extend(img.pixels().flat_map(|p| [p[0], p[1], p[2]]));
+        std::fs::write(path, out).map_err(|e| format!("cannot write file: {e}"))
+    }
+
+    #[test]
+    fn raw_handoff_round_trips_rgb() {
+        let img = RgbaImage::from_fn(7, 5, |x, y| image::Rgba([(x * 30) as u8, (y * 40) as u8, 9, 255]));
+        let path = std::env::temp_dir().join(format!("citrine_handoff_{}.ctrn", std::process::id()));
+        let p = path.to_str().unwrap();
+        write_raw(p, &img).unwrap();
+        let back = load(p).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(back, img);
+    }
 }
 
 #[cfg(test)]

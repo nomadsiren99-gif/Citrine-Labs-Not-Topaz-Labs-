@@ -1,0 +1,15 @@
+[package]
+name = "plugin-ffi"
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+
+[lib]
+name = "citrine_plugin_ffi"
+crate-type = ["staticlib", "rlib"]
+
+# Only adjust-core, so the Photoshop plug-in does not link the GPU engine.
+[dependencies]
+adjust-core = { path = "../quartz-core" }
+image = { version = "0.25", default-features = false }
+serde_json = "1"

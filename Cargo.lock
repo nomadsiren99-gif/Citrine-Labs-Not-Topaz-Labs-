@@ -1037,7 +1037,10 @@ dependencies = [
 name = "engine-ffi"
 version = "0.1.0"
 dependencies = [
+ "adjust-core",
  "engine",
+ "image",
+ "serde_json",
 ]
 
 [[package]]
@@ -2895,6 +2898,15 @@ dependencies = [
  "quick-xml",
  "serde",
  "time",
+]
+
+[[package]]
+name = "plugin-ffi"
+version = "0.1.0"
+dependencies = [
+ "adjust-core",
+ "image",
+ "serde_json",
 ]
 
 [[package]]

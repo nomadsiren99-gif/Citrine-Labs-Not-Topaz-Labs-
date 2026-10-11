@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Citrine",
+  "productName": "Citrine Labs",
   "version": "0.1.0",
   "identifier": "local.photoeditor.desktop",
   "build": {
@@ -30,6 +30,17 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "ctrn"
+        ],
+        "name": "Citrine Hand-off",
+        "description": "Citrine Labs hand-off image",
+        "role": "Editor",
+        "rank": "Owner"
+      }
     ]
   }
 }

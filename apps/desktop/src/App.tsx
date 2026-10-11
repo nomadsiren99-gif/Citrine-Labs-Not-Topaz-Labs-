@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { listen } from "@tauri-apps/api/event";
 import { NEUTRAL, SECTIONS, Sliders, hexToLinear, linearToHex } from "./controls";
 import { LS_DEFAULT, LS_SECTIONS, LsParams, getPath, setPath as setLsPath } from "./quartz";
 import { CurvePanel } from "./CurvePanel";
@@ -53,7 +54,19 @@ export default function App() {
   const [centre, setCentre] = useState<[number, number] | null>(null);
   const [cropUrl, setCropUrl] = useState<string | null>(null);
   const [cropDims, setCropDims] = useState<[number, number]>([0, 0]);
+  const [cropCentre, setCropCentre] = useState<[number, number] | null>(null);
   const viewRef = useRef<HTMLDivElement>(null);
+  // Split view: the image box is the largest rectangle with the photo's aspect ratio inside the view.
+  const [splitEl, setSplitEl] = useState<HTMLDivElement | null>(null);
+  const [splitSize, setSplitSize] = useState<[number, number]>([0, 0]);
+  const [splitAspect, setSplitAspect] = useState<number | null>(null);
+  useEffect(() => {
+    if (!splitEl) return;
+    const ro = new ResizeObserver(() => setSplitSize([splitEl.clientWidth, splitEl.clientHeight]));
+    ro.observe(splitEl);
+    setSplitSize([splitEl.clientWidth, splitEl.clientHeight]);
+    return () => ro.disconnect();
+  }, [splitEl]);
   const drag = useRef<{ x: number; y: number } | null>(null);
   const [hist, setHist] = useState<Hist | null>(null);
   const [channel, setChannel] = useState<"rgb" | "l" | "r" | "g" | "b">("rgb");
@@ -111,20 +124,55 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  // Hand-off files sit beside the plug-in's settings file (<name>.settings.json), which holds the
+  // settings Photoshop last used. Without one (first apply) the defaults are used.
+  const handoffBase = (p: string) => p.replace(/\.ctrn$/i, "");
+  const openPath = (p: string) => {
+    setPath(p);
+    setStatus(`Opened ${p}`);
+    if (!p.toLowerCase().endsWith(".ctrn")) return;
+    invoke<string>("read_text_file", { path: handoffBase(p) + ".settings.json" })
+      .then((text) => setLs({ ...LS_DEFAULT, ...JSON.parse(text) }))
+      .catch(() => setLs(LS_DEFAULT));
+  };
+
+  // A file opened from Photoshop or Finder loads here. One opened at launch is picked up from the
+  // backend, because the open event can fire before this listener exists.
+  useEffect(() => {
+    invoke<string | null>("take_pending_open").then((p) => { if (p) openPath(p); });
+  }, []);
+  useEffect(() => {
+    const unlisten = listen<string>("open-file", (e) => openPath(e.payload));
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
+
+  // OK for a Photoshop hand-off: the settings go back to the plug-in, which renders the layer itself.
+  const sendToPhotoshop = () => {
+    setStatus("Sending to Photoshop...");
+    invoke("write_text_file", { path: handoffBase(path) + ".result.json", contents: JSON.stringify(ls, null, 2) })
+      .then(() => setStatus("Sent to Photoshop"))
+      .catch((e) => setStatus(String(e)));
+  };
+
+  // Cancel for a Photoshop hand-off: Photoshop applies nothing.
+  const cancelHandoff = () => {
+    invoke("write_text_file", { path: handoffBase(path) + ".cancel", contents: "" })
+      .then(() => setStatus("Cancelled: Photoshop applies nothing"))
+      .catch((e) => setStatus(String(e)));
+  };
+
   // Drag and drop an image onto the window.
   useEffect(() => {
     const unlisten = getCurrentWebview().onDragDropEvent((e) => {
-      if (e.payload.type === "drop" && e.payload.paths.length > 0) {
-        setPath(e.payload.paths[0]);
-        setStatus(`Opened ${e.payload.paths[0]}`);
-      }
+      if (e.payload.type === "drop" && e.payload.paths.length > 0) openPath(e.payload.paths[0]);
     });
     return () => {
       unlisten.then((f) => f());
     };
   }, []);
 
-  const shownSliders = useMemo(() => (showBefore ? NEUTRAL : sliders), [showBefore, sliders]);
   const shownLs = useMemo(() => (showBefore ? LS_DEFAULT : ls), [showBefore, ls]);
 
   // Image size when the path changes; the crop centre starts in the middle.
@@ -145,12 +193,13 @@ export default function App() {
       const h = Math.min(imageSize[1], Math.ceil(vh / zoom));
       const x = Math.max(0, Math.min(imageSize[0] - w, Math.round(centre[0] - w / 2)));
       const y = Math.max(0, Math.min(imageSize[1] - h, Math.round(centre[1] - h / 2)));
-      invoke<string>("render_crop", { path, sliders: shownSliders, x, y, w, h })
-        .then((b64) => { setCropUrl(`data:image/png;base64,${b64}`); setCropDims([w, h]); })
+      const asked: [number, number] = [centre[0], centre[1]];
+      invoke<string>("render_quartz_crop", { path, params: shownLs, x, y, w, h })
+        .then((b64) => { setCropUrl(`data:image/png;base64,${b64}`); setCropDims([w, h]); setCropCentre(asked); })
         .catch((e) => setStatus(String(e)));
-    }, 120);
+    }, 250);
     return () => window.clearTimeout(id);
-  }, [zoom, path, imageSize, centre, shownSliders]);
+  }, [zoom, path, imageSize, centre, shownLs]);
 
   // Live preview. While a slider moves, a 480 px draft is shown at once; when it settles (250 ms)
   // the full 960 px preview replaces it. Only the newest request may update the image, so a late
@@ -259,16 +308,35 @@ export default function App() {
   // Wheel zoom around the cursor: the image point under the pointer stays under it.
   const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     if (!imageSize || !centre) return;
+    // Two-finger drag (no ctrl): pan, the content follows the fingers.
+    if (!e.ctrlKey) {
+      if (zoom === "fit") return;
+      e.preventDefault();
+      const nx = Math.max(0, Math.min(imageSize[0], centre[0] + e.deltaX / zoom));
+      const ny = Math.max(0, Math.min(imageSize[1], centre[1] + e.deltaY / zoom));
+      setCentre([nx, ny]);
+      return;
+    }
+    // Pinch (ctrl + wheel on macOS): zoom about the cursor; the point under it stays put.
+    e.preventDefault();
     const img = e.currentTarget.querySelector("img")?.getBoundingClientRect();
-    const cur = zoom === "fit" ? 1 : zoom;
-    const next = zoom === "fit" ? 1 : Math.min(8, Math.max(0.5, cur * (e.deltaY < 0 ? 1.25 : 0.8)));
+    // Fit scale: the zoom at which the whole picture just fits the view. Zooming out past it returns to Fit.
+    const vw = viewRef.current?.clientWidth ?? 900;
+    const vh = viewRef.current?.clientHeight ?? 600;
+    const fitScale = Math.min(vw / imageSize[0], vh / imageSize[1]);
+    const cur = zoom === "fit" ? fitScale : zoom;
+    const next = Math.min(8, Math.max(0.5, cur * Math.exp(-e.deltaY * 0.01)));
+    if (next <= fitScale) {
+      setZoom("fit");
+      setCentre([imageSize[0] / 2, imageSize[1] / 2]);
+      return;
+    }
     const r = e.currentTarget.getBoundingClientRect();
-    // Image pixel under the cursor, from the on-screen scale of the current view.
     const scale = zoom === "fit" && img ? img.width / imageSize[0] : cur;
     const ox = zoom === "fit" && img ? (e.clientX - img.left) / scale : centre[0] + (e.clientX - r.left - r.width / 2) / cur;
     const oy = zoom === "fit" && img ? (e.clientY - img.top) / scale : centre[1] + (e.clientY - r.top - r.height / 2) / cur;
-    const cx = zoom === "fit" ? ox : ox - (e.clientX - r.left - r.width / 2) / next;
-    const cy = zoom === "fit" ? oy : oy - (e.clientY - r.top - r.height / 2) / next;
+    const cx = ox - (e.clientX - r.left - r.width / 2) / next;
+    const cy = oy - (e.clientY - r.top - r.height / 2) / next;
     setCentre([Math.max(0, Math.min(imageSize[0], cx)), Math.max(0, Math.min(imageSize[1], cy))]);
     setZoom(next);
   };
@@ -364,12 +432,17 @@ export default function App() {
           <button className={zoom === 2 ? "sel" : ""} onClick={() => setZoom(2)}>200%</button>
         </div>
         {view === "split" && preview && before ? (
-          <div className="viewport split"
+          <div className="viewport split" ref={setSplitEl}
             onPointerDown={(e) => { drag.current = { x: e.clientX, y: e.clientY }; e.currentTarget.setPointerCapture(e.pointerId); wipeTo(e); }}
             onPointerMove={(e) => { if (drag.current) wipeTo(e); }}
             onPointerUp={() => { drag.current = null; if (wipeFrac.current !== null) setWipe(wipeFrac.current); }}>
-            <div className="compare">
-              <img src={before} alt="before" />
+            <div className="compare" style={(() => {
+              const aspect = splitAspect ?? 1;
+              let bw = splitSize[0], bh = bw / aspect;
+              if (bh > splitSize[1]) { bh = splitSize[1]; bw = bh * aspect; }
+              return { width: `${bw}px`, height: `${bh}px` };
+            })()}>
+              <img src={before} alt="before" onLoad={(e) => setSplitAspect(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)} />
               <img ref={afterRef} src={preview} alt="after" style={{ clipPath: `inset(0 0 0 ${wipe * 100}%)` }} />
               <div ref={lineRef} className="wipe-line" style={{ left: `${wipe * 100}%` }}><span>‹ ›</span></div>
               <span className="tag l">Before</span>
@@ -394,7 +467,13 @@ export default function App() {
             onPointerUp={() => { drag.current = null; }}>
             {cropUrl ? (
               <img src={cropUrl} alt="1:1 crop" draggable={false}
-                style={{ width: `${cropDims[0] * zoom}px`, height: `${cropDims[1] * zoom}px` }} />
+                style={{
+                  width: `${cropDims[0] * zoom}px`, height: `${cropDims[1] * zoom}px`,
+                  // Move with the pointer right away; the sharp crop replaces this when it arrives.
+                  transform: cropCentre && centre
+                    ? `translate(${-(centre[0] - cropCentre[0]) * zoom}px, ${-(centre[1] - cropCentre[1]) * zoom}px)`
+                    : undefined,
+                }} />
             ) : <p>Rendering crop...</p>}
             {imageSize && centre ? (
               <span className="crop-info">{zoom * 100}% · centre {Math.round(centre[0])}, {Math.round(centre[1])} of {imageSize[0]}×{imageSize[1]} · drag to pan</span>
@@ -412,7 +491,14 @@ export default function App() {
         <div className="toolbar">
           <button onClick={chooseOutput}>Choose...</button>
           <input placeholder="Output path, e.g. /Users/you/out.png" value={outPath} onChange={(e) => setOutPath(e.target.value)} />
-          <button disabled={!path || !outPath} onClick={exportImage}>Export</button>
+          {path.toLowerCase().endsWith(".ctrn") ? (
+            <>
+              <button onClick={cancelHandoff}>Cancel</button>
+              <button onClick={sendToPhotoshop}>OK: send to Photoshop</button>
+            </>
+          ) : (
+            <button disabled={!path || !outPath} onClick={exportImage}>Export</button>
+          )}
         </div>
         <p className="status">{status}{renderMs !== null ? `  |  preview render ${renderMs} ms` : ""}</p>
       </main>
