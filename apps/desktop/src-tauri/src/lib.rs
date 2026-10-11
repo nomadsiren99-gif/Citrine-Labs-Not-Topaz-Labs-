@@ -44,7 +44,8 @@ fn kind_of(k: u8) -> StrokeKind {
         0 => StrokeKind::Dodge,
         1 => StrokeKind::Burn,
         2 => StrokeKind::Smooth,
-        _ => StrokeKind::BrushOut,
+        3 => StrokeKind::BrushOut,
+        _ => StrokeKind::Erase,
     }
 }
 
@@ -64,6 +65,9 @@ pub struct Sliders {
     pub adaptive_brightness: f32,
     pub protect_highlights: f32,
     pub protect_shadows: f32,
+    // HDR (own method: base compression with detail kept)
+    pub hdr_strength: f32,
+    pub hdr_detail: f32,
     // Details
     pub details: f32,
     pub detail_boost: f32,
@@ -121,6 +125,7 @@ impl Default for Sliders {
             ev: 0.0, basic_contrast: 0.0, boost_blacks: 0.0, boost_whites: 0.0,
             adaptive: 0.0, adaptive_contrast: 0.0, adaptive_regions: 4.0, adaptive_brightness: 0.0,
             protect_highlights: 0.0, protect_shadows: 0.0,
+            hdr_strength: 0.0, hdr_detail: 1.0,
             details: 1.0, detail_boost: 1.0, detail_threshold: 0.5, detail_radius: 1.5, detail_sharpen: 0.0,
             process_independently: false,
             adaptive_saturation: 0.0, saturation: 1.0, saturation_boost: 0.0, hue: 0.0, color_regions: 1.0,
@@ -153,6 +158,7 @@ impl Sliders {
                 protect_highlights: self.protect_highlights,
                 protect_shadows: self.protect_shadows,
             },
+            hdr: engine::hdr::Hdr { strength: self.hdr_strength, detail: self.hdr_detail },
             details: Details {
                 strength: self.details,
                 boost: self.detail_boost,
@@ -183,6 +189,7 @@ impl Sliders {
                     hardness: self.stroke_hardness,
                     opacity: self.stroke_opacity,
                     overall_strength: self.stroke_strength,
+                    edge_aware: 0.0,
                 })
                 .into_iter()
                 .chain(self.brush.iter().map(|d| Stroke {
@@ -192,6 +199,7 @@ impl Sliders {
                     hardness: d.hardness,
                     opacity: d.opacity,
                     overall_strength: d.strength,
+                    edge_aware: 0.0,
                 }))
                 .collect(),
             finishing: Finishing {
@@ -209,19 +217,33 @@ impl Sliders {
                 border_size: self.border_size,
                 border_color: self.border_color,
                 transparency: self.transparency,
+                ..Default::default()
             },
         }
     }
 }
 
 fn load(path: &str) -> Result<RgbaImage, String> {
-    image::open(path).map(|i| i.to_rgba8()).map_err(|e| format!("cannot open image: {e}"))
+    // EXIF orientation is applied on load, matching the CLI.
+    let err = |e: image::ImageError| format!("cannot open image: {e}");
+    let mut decoder = image::ImageReader::open(path).map_err(|e| format!("cannot open image: {e}"))?
+        .with_guessed_format().map_err(|e| format!("cannot open image: {e}"))?
+        .into_decoder().map_err(err)?;
+    let orientation = image::ImageDecoder::orientation(&mut decoder).map_err(err)?;
+    let mut img = image::DynamicImage::from_decoder(decoder).map_err(err)?;
+    img.apply_orientation(orientation);
+    Ok(img.to_rgba8())
 }
 
 fn render(src: &RgbaImage, look: &Look) -> Result<RgbaImage, String> {
     let (w, h) = src.dimensions();
     let mut img = LinearImage::from_srgb8(w as usize, h as usize, src.as_raw()).map_err(|e| e.to_string())?;
-    apply_look(&mut img, look).map_err(|e| e.to_string())?;
+    // Large images render tile by tile with halo margins (same result, bounded memory).
+    if (w as usize) * (h as usize) > 4_000_000 {
+        img = engine::tiled::apply_look_tiled(&img, look, 1024).map_err(|e| e.to_string())?;
+    } else {
+        apply_look(&mut img, look).map_err(|e| e.to_string())?;
+    }
     RgbaImage::from_raw(w, h, img.to_srgb8()).ok_or_else(|| "output buffer size mismatch".to_string())
 }
 
@@ -243,6 +265,54 @@ fn render_preview(path: String, sliders: Sliders) -> Result<String, String> {
 }
 
 /// Renders at full resolution and writes the file. Format comes from the output extension.
+/// Zoom: a full-resolution crop at 1:1, rendered with the same whole-image values as the full
+/// render. The source image and the measured plan are cached, so panning is quick until a slider moves.
+struct ZoomCache {
+    path: String,
+    look_key: String,
+    src: LinearImage,
+    plan: engine::tiled::Plan,
+}
+
+static ZOOM: std::sync::Mutex<Option<ZoomCache>> = std::sync::Mutex::new(None);
+
+/// Width and height of the image at `path`, in pixels.
+#[tauri::command]
+fn image_size(path: String) -> Result<(u32, u32), String> {
+    let img = load(&path)?;
+    Ok((img.width(), img.height()))
+}
+
+/// Renders the rectangle `(x, y, w, h)` of the image at full resolution, as a base64 PNG.
+#[tauri::command]
+fn render_crop(path: String, sliders: Sliders, x: u32, y: u32, w: u32, h: u32) -> Result<String, String> {
+    let look = sliders.look();
+    let look_key = format!("{look:?}");
+    let mut cache = ZOOM.lock().map_err(|e| e.to_string())?;
+    let fresh = match cache.as_ref() {
+        Some(c) => c.path != path || c.look_key != look_key,
+        None => true,
+    };
+    if fresh {
+        let src_rgba = load(&path)?;
+        let (sw, sh) = src_rgba.dimensions();
+        let src = LinearImage::from_srgb8(sw as usize, sh as usize, src_rgba.as_raw()).map_err(|e| e.to_string())?;
+        let plan = engine::tiled::Plan::new(&src, &look, 1024).map_err(|e| e.to_string())?;
+        *cache = Some(ZoomCache { path: path.clone(), look_key, src, plan });
+    }
+    let c = cache.as_ref().expect("cache filled above");
+    let (sw, sh) = (c.src.width() as u32, c.src.height() as u32);
+    let x = x.min(sw.saturating_sub(1));
+    let y = y.min(sh.saturating_sub(1));
+    let w = w.min(sw - x).max(1);
+    let h = h.min(sh - y).max(1);
+    let out = c.plan.render_region(&c.src, (x as usize, y as usize, w as usize, h as usize)).map_err(|e| e.to_string())?;
+    let rgba = RgbaImage::from_raw(w, h, out.to_srgb8()).ok_or("crop buffer size mismatch")?;
+    let mut buf = Cursor::new(Vec::new());
+    DynamicImage::ImageRgba8(rgba).write_to(&mut buf, ImageFormat::Png).map_err(|e| e.to_string())?;
+    Ok(STANDARD.encode(buf.into_inner()))
+}
+
 #[tauri::command]
 fn export_image(path: String, out_path: String, sliders: Sliders) -> Result<(), String> {
     let full = load(&path)?;
@@ -269,17 +339,38 @@ fn limestone_render(src: &RgbaImage, params: &AdjustParams) -> RgbaImage {
     result
 }
 
-/// Exact Limestone preview (downscaled to the preview size, as in Limestone's own live preview).
+/// The preview source (decoded and downscaled to PREVIEW_MAX_SIDE) for the last image opened. Slider
+/// changes reuse it, so the photo is not decoded again on every change.
+static PREVIEW_SOURCE: std::sync::Mutex<Option<(String, RgbaImage)>> = std::sync::Mutex::new(None);
+
+fn preview_source(path: &str, side: u32) -> Result<RgbaImage, String> {
+    let mut cache = PREVIEW_SOURCE.lock().map_err(|e| e.to_string())?;
+    if cache.as_ref().map(|(p, _)| p != path).unwrap_or(true) {
+        let full = load(path)?;
+        let scale = (PREVIEW_MAX_SIDE as f32 / full.width().max(full.height()) as f32).min(1.0);
+        let small = if scale < 1.0 {
+            let (w, h) = ((full.width() as f32 * scale).round() as u32, (full.height() as f32 * scale).round() as u32);
+            image::imageops::resize(&full, w.max(1), h.max(1), FilterType::Triangle)
+        } else {
+            full
+        };
+        *cache = Some((path.to_string(), small));
+    }
+    let (_, src) = cache.as_ref().expect("cache filled above");
+    let longest = src.width().max(src.height());
+    if side >= longest {
+        return Ok(src.clone());
+    }
+    let f = side as f32 / longest as f32;
+    let (w, h) = ((src.width() as f32 * f).round().max(1.0) as u32, (src.height() as f32 * f).round().max(1.0) as u32);
+    Ok(image::imageops::resize(src, w, h, FilterType::Triangle))
+}
+
+/// Exact Limestone preview. `side` is the longest side in pixels: a small draft while a slider moves,
+/// the full preview size once it settles. Defaults to PREVIEW_MAX_SIDE.
 #[tauri::command]
-fn render_limestone_preview(path: String, params: AdjustParams) -> Result<String, String> {
-    let full = load(&path)?;
-    let scale = (PREVIEW_MAX_SIDE as f32 / full.width().max(full.height()) as f32).min(1.0);
-    let small = if scale < 1.0 {
-        let (w, h) = ((full.width() as f32 * scale).round() as u32, (full.height() as f32 * scale).round() as u32);
-        image::imageops::resize(&full, w.max(1), h.max(1), FilterType::Triangle)
-    } else {
-        full
-    };
+fn render_limestone_preview(path: String, params: AdjustParams, side: Option<u32>) -> Result<String, String> {
+    let small = preview_source(&path, side.unwrap_or(PREVIEW_MAX_SIDE))?;
     let out = limestone_render(&small, &params);
     let mut buf = Cursor::new(Vec::new());
     DynamicImage::ImageRgba8(out).write_to(&mut buf, ImageFormat::Png).map_err(|e| e.to_string())?;
@@ -311,7 +402,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            render_preview, export_image, write_text_file, read_text_file,
+            render_preview, export_image, write_text_file, read_text_file, image_size, render_crop,
             limestone_presets, render_limestone_preview, export_limestone
         ])
         .run(tauri::generate_context!())
@@ -387,7 +478,7 @@ mod tests {
     fn every_limestone_factory_preset_renders() {
         let src = RgbaImage::from_fn(64, 48, |x, y| image::Rgba([(x * 3) as u8, (y * 5) as u8, 120, 255]));
         let presets = limestone_presets();
-        assert_eq!(presets.len(), 21);
+        assert_eq!(presets.len(), 157);
         for p in presets {
             let out = limestone_render(&src, &p.params);
             assert_eq!(out.dimensions(), (64, 48), "preset {}", p.name);

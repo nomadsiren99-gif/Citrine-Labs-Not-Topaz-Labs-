@@ -61,26 +61,37 @@ impl Details {
             .map(|p| luma(p).max(LUMA_EPS).log2())
             .collect();
         // Guided base (as in the author's Limestone detail stage): edges stay out of the residue.
-        let base = crate::guided::guided_filter(&log_luma, &log_luma, img.width(), img.height(), radius, 2e-2);
+        let base = crate::guided::guided_filter_auto(&log_luma, &log_luma, img.width(), img.height(), radius, 2e-2);
         Ok(log_luma.iter().zip(base).map(|(l, b)| l - b).collect())
     }
 
     /// Scales `img` by the gains applied to `residue`. Pass a residue from before any tone change
     /// to keep detail independent of exposure.
     pub fn apply_residue(&self, img: &mut LinearImage, residue: &[f32]) {
+        self.apply_residue_with(img, residue, None);
+    }
+
+    /// Like `apply_residue`, with an optional whole-image noise level (see `tiled`).
+    pub fn apply_residue_with(&self, img: &mut LinearImage, residue: &[f32], sigma: Option<f32>) {
         let strength = self.strength.clamp(0.0, 2.0);
         let boost = self.boost.clamp(0.0, 2.0);
         let sharpen = self.sharpen.clamp(0.0, 2.0);
         // Higher threshold lowers the cut, so more structures count as strong detail.
         let cut = 0.02 + 0.3 * (1.0 - self.threshold.clamp(0.0, 1.0));
 
+        let sigma = sigma.unwrap_or_else(|| noise_sigma(residue));
         for (px, &d) in img.data_mut().chunks_exact_mut(4).zip(residue) {
             if !luma(px).is_finite() {
                 continue;
             }
             let admit = smoothstep(0.5 * cut, cut, d.abs());
             let gain = boost + (strength - boost) * admit;
-            let delta = ((gain - 1.0) + 0.5 * sharpen) * d;
+            // Amplifying gain (boost, sharpen) must not act on noise-level residue. Smoothing does.
+            let mut k = (gain - 1.0) + 0.5 * sharpen;
+            if k > 0.0 && sigma > 1e-4 {
+                k *= smoothstep(2.0 * sigma, 4.0 * sigma, d.abs());
+            }
+            let delta = k * d;
             let g = delta.clamp(-MAX_DETAIL_EV, MAX_DETAIL_EV).exp2();
             px[0] *= g;
             px[1] *= g;
@@ -89,9 +100,77 @@ impl Details {
     }
 }
 
+/// Histogram bins for the noise estimate. The median is read from bins over |residue| in 0..2
+/// log2, so a tile can add its counts to the whole-image histogram and get the same result as a
+/// full-frame run. Bin width is 2/4096 log2, far below anything visible.
+pub(crate) const SIGMA_BINS: usize = 4096;
+pub(crate) const SIGMA_MAX: f32 = 2.0;
+
+/// Histogram of |residue|, clamped to the bin range.
+pub(crate) fn abs_histogram(residue: &[f32]) -> Vec<u64> {
+    let mut hist = vec![0u64; SIGMA_BINS];
+    for d in residue {
+        let bin = ((d.abs() / SIGMA_MAX) * SIGMA_BINS as f32) as usize;
+        hist[bin.min(SIGMA_BINS - 1)] += 1;
+    }
+    hist
+}
+
+/// Robust noise level from a |residue| histogram: 1.4826 times the median.
+pub(crate) fn sigma_from_histogram(hist: &[u64]) -> f32 {
+    let total: u64 = hist.iter().sum();
+    if total == 0 {
+        return 0.0;
+    }
+    let mut acc = 0u64;
+    for (bin, &n) in hist.iter().enumerate() {
+        acc += n;
+        if acc * 2 >= total {
+            return 1.4826 * (bin as f32 + 0.5) * SIGMA_MAX / SIGMA_BINS as f32;
+        }
+    }
+    0.0
+}
+
+/// Robust noise level of the residue (see `sigma_from_histogram`).
+pub(crate) fn noise_sigma(residue: &[f32]) -> f32 {
+    sigma_from_histogram(&abs_histogram(residue))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Flat grey with deterministic pseudo-random noise of about 3 code values (LCG, no deps).
+    fn flat_noise() -> LinearImage {
+        let mut s: u32 = 12345;
+        let mut rgba = Vec::with_capacity(64 * 64 * 4);
+        for _ in 0..64 * 64 {
+            s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let u = (s >> 8) as f32 / (1u32 << 24) as f32 - 0.5;
+            let v = (128.0 + 6.0 * u).round() as u8;
+            rgba.extend_from_slice(&[v, v, v, 255]);
+        }
+        LinearImage::from_srgb8(64, 64, &rgba).unwrap()
+    }
+
+    fn std_of_luma(img: &LinearImage) -> f32 {
+        let l: Vec<f32> = img.data().chunks_exact(4).map(luma).collect();
+        let m = l.iter().sum::<f32>() / l.len() as f32;
+        (l.iter().map(|x| (x - m) * (x - m)).sum::<f32>() / l.len() as f32).sqrt()
+    }
+
+    #[test]
+    fn boost_and_sharpen_do_not_amplify_flat_noise() {
+        // Regression: boost 1.3 plus sharpen 1.0 used to raise flat-patch noise by about 1.65x.
+        let before = flat_noise();
+        let mut img = before.clone();
+        Details { strength: 1.07, boost: 1.30, threshold: 0.08, sharpen: 1.0, radius: 4.0, ..Default::default() }
+            .apply(&mut img)
+            .unwrap();
+        let ratio = std_of_luma(&img) / std_of_luma(&before);
+        assert!(ratio < 1.1, "noise amplified by {ratio:.2}x");
+    }
 
     /// 40x4 image: columns 0..20 are sRGB 100, columns 20..40 are sRGB 200.
     fn step_image() -> LinearImage {
@@ -197,5 +276,51 @@ mod tests {
             Details { radius: f32::NAN, ..Default::default() }.apply(&mut img),
             Err(EngineError::NonFiniteParameter("radius"))
         );
+    }
+}
+
+#[cfg(test)]
+mod gate2_tests {
+    //! Gate 2: sharpening must not ring. Overshoot beyond the plateau is measured against the step.
+    use super::*;
+
+    /// 64x1 step, sRGB 60 to 180 at the middle.
+    fn edge() -> LinearImage {
+        let mut rgba = Vec::new();
+        for x in 0..64 {
+            let v = if x < 32 { 60u8 } else { 180u8 };
+            rgba.extend_from_slice(&[v, v, v, 255]);
+        }
+        LinearImage::from_srgb8(64, 1, &rgba).unwrap()
+    }
+
+    /// Largest excursion past the far plateau, as a fraction of the step in luma.
+    fn overshoot(img: &LinearImage, before: &LinearImage) -> f32 {
+        let l = |i: &LinearImage, x: usize| luma(&i.data()[x * 4..]);
+        let (lo, hi) = (l(before, 4), l(before, 60));
+        let step = (hi - lo).abs();
+        let mut worst = 0.0f32;
+        for x in 0..64 {
+            let v = l(img, x);
+            let past = if x < 32 { (lo - v).max(0.0) } else { (v - hi).max(0.0) };
+            worst = worst.max(past);
+        }
+        worst / step
+    }
+
+    #[test]
+    fn sharpening_overshoot_is_bounded() {
+        let before = edge();
+        for (name, d) in [
+            ("default", Details::default()),
+            ("medium", Details { strength: 1.07, boost: 1.30, threshold: 0.08, radius: 2.0, sharpen: 1.0, process_independently: false }),
+            ("strong", Details { strength: 1.5, boost: 1.0, threshold: 0.5, radius: 2.0, sharpen: 2.0, process_independently: false }),
+        ] {
+            let mut img = before.clone();
+            d.apply(&mut img).unwrap();
+            let o = overshoot(&img, &before);
+            eprintln!("gate2 {name}: overshoot {:.2}% of the step", o * 100.0);
+            assert!(o < 0.02, "{name}: ringing {:.1}% of the step", o * 100.0);
+        }
     }
 }

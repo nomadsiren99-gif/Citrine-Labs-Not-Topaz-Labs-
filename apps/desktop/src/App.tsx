@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { NEUTRAL, PRESETS, SECTIONS, Sliders, Dab, hexToLinear, linearToHex } from "./controls";
-import { FACTORY_PRESETS } from "./presets";
+import { NEUTRAL, SECTIONS, Sliders, hexToLinear, linearToHex } from "./controls";
 import { LS_DEFAULT, LS_SECTIONS, LsParams, getPath, setPath as setLsPath } from "./limestone";
 import { CurvePanel } from "./CurvePanel";
+import { HueWheel } from "./HueWheel";
+import fullLogo from "./assets/citrine-full-white.svg";
 import { Histogram, Hist } from "./Histogram";
 import { Pt } from "./curveMath";
 import "./App.css";
@@ -35,7 +36,7 @@ function computeHist(img: HTMLImageElement): Hist {
 }
 
 export default function App() {
-  const [mode, setMode] = useState<"ours" | "limestone">("limestone");
+  const mode = "limestone" as const; // Limestone is the only engine in the UI
   const [path, setPath] = useState("");
   const [outPath, setOutPath] = useState("");
   const [sliders, setSliders] = useState<Sliders>(NEUTRAL);
@@ -46,7 +47,14 @@ export default function App() {
   const [preview, setPreview] = useState<string | null>(null);
   const [before, setBefore] = useState<string | null>(null);
   const [status, setStatus] = useState("Open an image to start.");
-  const [zoom, setZoom] = useState<"fit" | 1 | 2>("fit");
+  const [zoom, setZoom] = useState<"fit" | number>("fit");
+  // Real zoom: a full-resolution crop around `centre` (image pixels), panned by dragging.
+  const [imageSize, setImageSize] = useState<[number, number] | null>(null);
+  const [centre, setCentre] = useState<[number, number] | null>(null);
+  const [cropUrl, setCropUrl] = useState<string | null>(null);
+  const [cropDims, setCropDims] = useState<[number, number]>([0, 0]);
+  const viewRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ x: number; y: number } | null>(null);
   const [hist, setHist] = useState<Hist | null>(null);
   const [channel, setChannel] = useState<"rgb" | "l" | "r" | "g" | "b">("rgb");
   const [past, setPast] = useState<State[]>([]);
@@ -54,11 +62,6 @@ export default function App() {
   const [openSec, setOpenSec] = useState<Record<string, boolean>>({ basic_exposure: true, adaptive_exposure: true, curve: true });
   const [view, setView] = useState<"single" | "split" | "side">("single");
   const [wipe, setWipe] = useState(0.5);
-  const [paint, setPaint] = useState(false);
-  const [brushKind, setBrushKind] = useState(0);
-  const [brushRadius, setBrushRadius] = useState(0.05);
-  const [brushHardness, setBrushHardness] = useState(0.5);
-  const [brushOpacity, setBrushOpacity] = useState(0.5);
   const [renderMs, setRenderMs] = useState<number | null>(null);
   const [presetQuery, setPresetQuery] = useState("");
   const lastEdit = useRef(0);
@@ -124,36 +127,63 @@ export default function App() {
   const shownSliders = useMemo(() => (showBefore ? NEUTRAL : sliders), [showBefore, sliders]);
   const shownLs = useMemo(() => (showBefore ? LS_DEFAULT : ls), [showBefore, ls]);
 
-  // Live preview, debounced. Renders the active model.
+  // Image size when the path changes; the crop centre starts in the middle.
   useEffect(() => {
     if (!path) return;
+    invoke<[number, number]>("image_size", { path })
+      .then(([w, h]) => { setImageSize([w, h]); setCentre([w / 2, h / 2]); })
+      .catch((e) => setStatus(String(e)));
+  }, [path]);
+
+  // Full-resolution crop for the zoom views, debounced; re-rendered when sliders or centre change.
+  useEffect(() => {
+    if (zoom === "fit" || !path || !imageSize || !centre) return;
     const id = window.setTimeout(() => {
+      const vw = viewRef.current?.clientWidth ?? 900;
+      const vh = viewRef.current?.clientHeight ?? 600;
+      const w = Math.min(imageSize[0], Math.ceil(vw / zoom));
+      const h = Math.min(imageSize[1], Math.ceil(vh / zoom));
+      const x = Math.max(0, Math.min(imageSize[0] - w, Math.round(centre[0] - w / 2)));
+      const y = Math.max(0, Math.min(imageSize[1] - h, Math.round(centre[1] - h / 2)));
+      invoke<string>("render_crop", { path, sliders: shownSliders, x, y, w, h })
+        .then((b64) => { setCropUrl(`data:image/png;base64,${b64}`); setCropDims([w, h]); })
+        .catch((e) => setStatus(String(e)));
+    }, 120);
+    return () => window.clearTimeout(id);
+  }, [zoom, path, imageSize, centre, shownSliders]);
+
+  // Live preview. While a slider moves, a 480 px draft is shown at once; when it settles (250 ms)
+  // the full 960 px preview replaces it. Only the newest request may update the image, so a late
+  // reply never overwrites a newer one.
+  const previewReq = useRef(0);
+  useEffect(() => {
+    if (!path) return;
+    const show = (side: number) => {
+      const id = ++previewReq.current;
       const t0 = performance.now();
-      const req = mode === "ours"
-        ? invoke<string>("render_preview", { path, sliders: shownSliders })
-        : invoke<string>("render_limestone_preview", { path, params: shownLs });
-      req
+      return invoke<string>("render_limestone_preview", { path, params: shownLs, side })
         .then((b64) => {
+          if (id !== previewReq.current) return;
           setPreview(`data:image/png;base64,${b64}`);
           setRenderMs(Math.round(performance.now() - t0));
           setStatus("Preview ready.");
         })
         .catch((e) => setStatus(String(e)));
-    }, 150);
-    return () => window.clearTimeout(id);
-  }, [path, mode, shownSliders, shownLs]);
+    };
+    show(480);
+    const settle = window.setTimeout(() => show(960), 250);
+    return () => window.clearTimeout(settle);
+  }, [path, shownLs]);
 
   // Unadjusted preview for the split and side-by-side views.
   useEffect(() => {
     if (!path || view === "single") return;
     const id = window.setTimeout(() => {
-      const req = mode === "ours"
-        ? invoke<string>("render_preview", { path, sliders: NEUTRAL })
-        : invoke<string>("render_limestone_preview", { path, params: LS_DEFAULT });
+      const req = invoke<string>("render_limestone_preview", { path, params: LS_DEFAULT });
       req.then((b64) => setBefore(`data:image/png;base64,${b64}`)).catch(() => setBefore(null));
     }, 150);
     return () => window.clearTimeout(id);
-  }, [path, view, mode]);
+  }, [path, view]);
 
   // Histogram from the preview pixels.
   useEffect(() => {
@@ -162,19 +192,6 @@ export default function App() {
     img.onload = () => setHist(computeHist(img));
     img.src = preview;
   }, [preview]);
-
-  const choosePreset = (name: string) => {
-    commit();
-    setPreset(name);
-    setSliders({ ...NEUTRAL, ...PRESETS[name] });
-  };
-
-  const chooseFactory = (idx: number) => {
-    const p = FACTORY_PRESETS[idx];
-    commit();
-    setPreset(p.name);
-    setSliders({ ...NEUTRAL, ...p.values, limestone: false, brush: [] });
-  };
 
   const chooseLimestone = (p: LsPreset) => {
     commit();
@@ -203,30 +220,11 @@ export default function App() {
   const resetSection = (keys: string[]) => {
     commit();
     setPreset("Custom");
-    if (mode === "ours") {
-      setSliders((s) => {
-        const next = { ...s } as Record<string, unknown>;
-        for (const k of keys) next[k] = NEUTRAL[k as keyof Sliders];
-        return next as Sliders;
-      });
-    } else {
-      setLs((s) => {
-        const next = structuredClone(s) as Record<string, unknown>;
-        for (const k of keys) next[k] = structuredClone(LS_DEFAULT[k as keyof LsParams]);
-        return next as LsParams;
-      });
-    }
-  };
-
-  const paintAt = (e: React.PointerEvent<HTMLImageElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    const dab: Dab = {
-      kind: brushKind, x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height,
-      radius: brushRadius, hardness: brushHardness, opacity: brushOpacity, strength: 1,
-    };
-    commit();
-    setPreset("Custom");
-    setSliders((s) => ({ ...s, brush: [...s.brush, dab] }));
+    setLs((s) => {
+      const next = structuredClone(s) as Record<string, unknown>;
+      for (const k of keys) next[k] = structuredClone(LS_DEFAULT[k as keyof LsParams]);
+      return next as LsParams;
+    });
   };
 
   const openImage = async () => {
@@ -242,18 +240,49 @@ export default function App() {
     if (typeof picked === "string") setOutPath(picked);
   };
 
+  // Divider drag: moves the clip and the line directly in the DOM, one frame at a time, so the
+  // app does not re-render on every pointer move. The final position is committed on release.
+  const afterRef = useRef<HTMLImageElement>(null);
+  const lineRef = useRef<HTMLDivElement>(null);
+  const wipeFrac = useRef<number | null>(null);
+  const wipeTo = (e: React.PointerEvent<HTMLDivElement>) => {
+    const box = e.currentTarget.querySelector(".compare")?.getBoundingClientRect();
+    if (!box) return;
+    const f = Math.max(0, Math.min(1, (e.clientX - box.left) / box.width));
+    wipeFrac.current = f;
+    requestAnimationFrame(() => {
+      if (afterRef.current) afterRef.current.style.clipPath = `inset(0 0 0 ${f * 100}%)`;
+      if (lineRef.current) lineRef.current.style.left = `${f * 100}%`;
+    });
+  };
+
+  // Wheel zoom around the cursor: the image point under the pointer stays under it.
+  const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (!imageSize || !centre) return;
+    const img = e.currentTarget.querySelector("img")?.getBoundingClientRect();
+    const cur = zoom === "fit" ? 1 : zoom;
+    const next = zoom === "fit" ? 1 : Math.min(8, Math.max(0.5, cur * (e.deltaY < 0 ? 1.25 : 0.8)));
+    const r = e.currentTarget.getBoundingClientRect();
+    // Image pixel under the cursor, from the on-screen scale of the current view.
+    const scale = zoom === "fit" && img ? img.width / imageSize[0] : cur;
+    const ox = zoom === "fit" && img ? (e.clientX - img.left) / scale : centre[0] + (e.clientX - r.left - r.width / 2) / cur;
+    const oy = zoom === "fit" && img ? (e.clientY - img.top) / scale : centre[1] + (e.clientY - r.top - r.height / 2) / cur;
+    const cx = zoom === "fit" ? ox : ox - (e.clientX - r.left - r.width / 2) / next;
+    const cy = zoom === "fit" ? oy : oy - (e.clientY - r.top - r.height / 2) / next;
+    setCentre([Math.max(0, Math.min(imageSize[0], cx)), Math.max(0, Math.min(imageSize[1], cy))]);
+    setZoom(next);
+  };
+
   const exportImage = () => {
     setStatus("Exporting...");
-    const req = mode === "ours"
-      ? invoke("export_image", { path, outPath, sliders })
-      : invoke("export_limestone", { path, outPath, params: ls });
+    const req = invoke("export_limestone", { path, outPath, params: ls });
     req.then(() => setStatus(`Exported to ${outPath}`)).catch((e) => setStatus(String(e)));
   };
 
   const savePreset = async () => {
     const picked = await save({ defaultPath: "preset.json", filters: [{ name: "Preset", extensions: ["json"] }] });
     if (typeof picked !== "string") return;
-    const body = mode === "ours" ? sliders : ls;
+    const body = ls;
     invoke("write_text_file", { path: picked, contents: JSON.stringify(body, null, 2) })
       .then(() => setStatus(`Preset saved to ${picked}`))
       .catch((e) => setStatus(String(e)));
@@ -262,7 +291,7 @@ export default function App() {
   const saveProject = async () => {
     const picked = await save({ defaultPath: "session.photoproj.json", filters: [{ name: "Project", extensions: ["json"] }] });
     if (typeof picked !== "string") return;
-    const doc = { schemaVersion: PROJECT_SCHEMA, app: "photo-editor", mode, source: path, sliders, limestone: ls };
+    const doc = { schemaVersion: PROJECT_SCHEMA, app: "photo-editor", mode, source: path, limestone: ls };
     invoke("write_text_file", { path: picked, contents: JSON.stringify(doc, null, 2) })
       .then(() => setStatus(`Project saved to ${picked}`))
       .catch((e) => setStatus(String(e)));
@@ -278,9 +307,7 @@ export default function App() {
         return;
       }
       commit();
-      setSliders({ ...NEUTRAL, ...doc.sliders });
       setLs({ ...LS_DEFAULT, ...doc.limestone });
-      setMode(doc.mode === "ours" ? "ours" : "limestone");
       if (typeof doc.source === "string" && doc.source) setPath(doc.source);
       setStatus(`Project loaded from ${picked}`);
     } catch (e) {
@@ -303,42 +330,20 @@ export default function App() {
   return (
     <div className="app">
       <aside className="left">
-        <div className="modes">
-          <button className={mode === "limestone" ? "sel" : ""} onClick={() => setMode("limestone")}>Limestone</button>
-          <button className={mode === "ours" ? "sel" : ""} onClick={() => setMode("ours")}>Ours</button>
-        </div>
+        <div className="brand"><img src={fullLogo} alt="Citrine Labs" /></div>
         <input className="search" placeholder="Search presets" value={presetQuery} onChange={(e) => setPresetQuery(e.target.value)} />
-        {mode === "limestone" ? (
-          groupedLs.map(([cat, list]) => (
-            <div key={cat}>
-              <h2>{cat}</h2>
-              {list.map((p) => (
-                <button key={p.name} title={p.description} className={preset === p.name ? "sel" : ""} onClick={() => chooseLimestone(p)}>{p.name}</button>
-              ))}
-            </div>
-          ))
-        ) : (
-          <>
-            <h2>Presets</h2>
-            {Object.keys(PRESETS).filter((n) => n.toLowerCase().includes(presetQuery.toLowerCase())).map((name) => (
-              <button key={name} className={preset === name ? "sel" : ""} onClick={() => choosePreset(name)}>{name}</button>
+        {groupedLs.map(([cat, list]) => (
+          <div key={cat}>
+            <h2>{cat}</h2>
+            {list.map((p) => (
+              <button key={p.name} title={p.description} className={preset === p.name ? "sel" : ""} onClick={() => chooseLimestone(p)}>{p.name}</button>
             ))}
-            <h2>Factory</h2>
-            {FACTORY_PRESETS.map((p, i) => p.name.toLowerCase().includes(presetQuery.toLowerCase()) && (
-              <button key={p.name} title={p.description} className={preset === p.name ? "sel" : ""} onClick={() => chooseFactory(i)}>{p.name}</button>
-            ))}
-          </>
-        )}
+          </div>
+        ))}
         <h2>Files</h2>
         <button onClick={savePreset}>Save preset...</button>
         <button onClick={saveProject}>Save project...</button>
         <button onClick={loadProject}>Open project...</button>
-        {mode === "ours" && (
-          <>
-            <h2>Snapshots</h2>
-            <button onClick={() => setPast((p) => p)} disabled>Coming with history</button>
-          </>
-        )}
       </aside>
 
       <main className="center">
@@ -350,18 +355,6 @@ export default function App() {
         <div className="toolbar">
           <button onClick={undo} disabled={past.length === 0}>Undo</button>
           <button onClick={redo} disabled={future.length === 0}>Redo</button>
-          {mode === "ours" && (
-            <>
-              <button className={paint ? "sel" : ""} onClick={() => setPaint((p) => !p)}>Paint</button>
-              <select value={brushKind} onChange={(e) => setBrushKind(Number(e.target.value))}>
-                <option value={0}>Dodge</option><option value={1}>Burn</option><option value={2}>Smooth</option><option value={3}>Brush Out</option>
-              </select>
-              <label className="small">Size <input type="range" min={0.01} max={0.3} step={0.005} value={brushRadius} onChange={(e) => setBrushRadius(Number(e.target.value))} /></label>
-              <label className="small">Hard <input type="range" min={0} max={1} step={0.01} value={brushHardness} onChange={(e) => setBrushHardness(Number(e.target.value))} /></label>
-              <label className="small">Opacity <input type="range" min={0} max={1} step={0.01} value={brushOpacity} onChange={(e) => setBrushOpacity(Number(e.target.value))} /></label>
-              <button onClick={() => { commit(); setSliders((s) => ({ ...s, brush: [] })); }} disabled={sliders.brush.length === 0}>Clear paint ({sliders.brush.length})</button>
-            </>
-          )}
           <span className="spacer" />
           <button className={view === "single" ? "sel" : ""} onClick={() => setView("single")}>Single</button>
           <button className={view === "split" ? "sel" : ""} onClick={() => setView("split")}>Split Wipe</button>
@@ -371,23 +364,47 @@ export default function App() {
           <button className={zoom === 2 ? "sel" : ""} onClick={() => setZoom(2)}>200%</button>
         </div>
         {view === "split" && preview && before ? (
-          <div className="viewport split">
-            <img src={before} alt="before" className="layer" />
-            <img src={preview} alt="after" className="layer" style={{ clipPath: `inset(0 ${(1 - wipe) * 100}% 0 0)` }} />
-            <input className="wipe" type="range" min={0} max={1} step={0.01} value={wipe} onChange={(e) => setWipe(Number(e.target.value))} aria-label="split position" />
+          <div className="viewport split"
+            onPointerDown={(e) => { drag.current = { x: e.clientX, y: e.clientY }; e.currentTarget.setPointerCapture(e.pointerId); wipeTo(e); }}
+            onPointerMove={(e) => { if (drag.current) wipeTo(e); }}
+            onPointerUp={() => { drag.current = null; if (wipeFrac.current !== null) setWipe(wipeFrac.current); }}>
+            <div className="compare">
+              <img src={before} alt="before" />
+              <img ref={afterRef} src={preview} alt="after" style={{ clipPath: `inset(0 0 0 ${wipe * 100}%)` }} />
+              <div ref={lineRef} className="wipe-line" style={{ left: `${wipe * 100}%` }}><span>‹ ›</span></div>
+              <span className="tag l">Before</span>
+              <span className="tag r">After</span>
+            </div>
           </div>
         ) : view === "side" && preview && before ? (
           <div className="viewport side">
             <img src={before} alt="before" />
             <img src={preview} alt="after" />
           </div>
+        ) : zoom !== "fit" ? (
+          <div className="viewport crop" ref={viewRef} onWheel={onWheel}
+            onPointerDown={(e) => { drag.current = { x: e.clientX, y: e.clientY }; e.currentTarget.setPointerCapture(e.pointerId); }}
+            onPointerMove={(e) => {
+              if (!drag.current || !centre || !imageSize) return;
+              const dx = (e.clientX - drag.current.x) / zoom;
+              const dy = (e.clientY - drag.current.y) / zoom;
+              drag.current = { x: e.clientX, y: e.clientY };
+              setCentre([Math.max(0, Math.min(imageSize[0], centre[0] - dx)), Math.max(0, Math.min(imageSize[1], centre[1] - dy))]);
+            }}
+            onPointerUp={() => { drag.current = null; }}>
+            {cropUrl ? (
+              <img src={cropUrl} alt="1:1 crop" draggable={false}
+                style={{ width: `${cropDims[0] * zoom}px`, height: `${cropDims[1] * zoom}px` }} />
+            ) : <p>Rendering crop...</p>}
+            {imageSize && centre ? (
+              <span className="crop-info">{zoom * 100}% · centre {Math.round(centre[0])}, {Math.round(centre[1])} of {imageSize[0]}×{imageSize[1]} · drag to pan</span>
+            ) : null}
+          </div>
         ) : (
-          <div className={`viewport zoom-${zoom}`}>
+          <div className={`viewport zoom-${zoom}`} ref={viewRef} onWheel={onWheel}>
             {preview ? (
-              <img src={preview} alt="preview" className={paint && mode === "ours" ? "painting" : ""}
-                style={zoom === "fit" ? undefined : { width: `${zoom * 100}%`, maxWidth: "none" }}
-                onPointerDown={(e) => { if (paint && mode === "ours") paintAt(e); }}
-                onPointerMove={(e) => { if (paint && mode === "ours" && e.buttons === 1) paintAt(e); }} />
+              <img src={preview} alt="preview"
+                style={zoom === "fit" ? undefined : { width: `${zoom * 100}%`, maxWidth: "none" }} />
             ) : <p>No preview</p>}
           </div>
         )}
@@ -424,6 +441,9 @@ export default function App() {
                         onChange={(e) => updateLs(sec.id, f.path, Number(e.target.value))} />
                     </label>
                   ))}
+                  {isOpen && sec.id === "color" && (
+                    <HueWheel value={ls.color.hue} onChange={(v) => updateLs("color", "hue", v)} />
+                  )}
                   {isOpen && sec.id === "details" && (
                     <label className="check"><input type="checkbox" checked={ls.details.process_independently}
                       onChange={(e) => updateLs("details", "process_independently", e.target.checked)} /> Process Details Independently</label>

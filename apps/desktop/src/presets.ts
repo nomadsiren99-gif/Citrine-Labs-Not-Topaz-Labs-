@@ -5,6 +5,18 @@ import type { Sliders } from "./controls";
 export type FactoryPreset = { name: string; category: string; description: string; values: Partial<Sliders> };
 
 export const FACTORY_PRESETS: FactoryPreset[] = [
+  { "name": "HDR Pop", "category": "HDR (own)", "description": "Punchy local contrast and texture on the scene, with skin kept natural warm tone.",
+    "values": { "hdrStrength": 0.5, "hdrDetail": 1.5, "adaptive": 0.52, "adaptiveRegions": 15, "adaptiveContrast": 0.1,
+      "protectHighlights": 0.48, "protectShadows": 0.4, "details": 1.3, "detailBoost": 1.25, "adaptiveSaturation": 0.2,
+      "saturation": 1.08, "saturationBoost": 0.05, "warmth": 0, "diffusion": 0.1 } },
+  { "name": "HDR Subtle", "category": "HDR (own)", "description": "Gentle highlight and shadow control with the local texture kept.",
+    "values": { "hdrStrength": 0.25, "hdrDetail": 1.2 } },
+  { "name": "HDR Natural", "category": "HDR (own)", "description": "Balanced local tone mapping for everyday high-contrast scenes.",
+    "values": { "hdrStrength": 0.5, "hdrDetail": 1.4 } },
+  { "name": "HDR Strong", "category": "HDR (own)", "description": "Strong compression of large-scale light and shadow for dramatic scenes.",
+    "values": { "hdrStrength": 0.8, "hdrDetail": 1.6 } },
+  { "name": "HDR Detail", "category": "HDR (own)", "description": "Mild compression with strong local detail, for textures and foliage.",
+    "values": { "hdrStrength": 0.2, "hdrDetail": 2.0 } },
   {
     "name": "Vivid Punch",
     "category": "HDR & Vibrant",
@@ -26,10 +38,10 @@ export const FACTORY_PRESETS: FactoryPreset[] = [
       "detailRadius": 1.2,
       "detailSharpen": 0.2,
       "processIndependently": true,
-      "adaptiveSaturation": 0.65,
+      "adaptiveSaturation": 0.3,
       "colorRegions": 10.0,
-      "saturation": 1.1,
-      "saturationBoost": 0.1499999999999999,
+      "saturation": 1.04,
+      "saturationBoost": 0.05,
       "hue": 0.0,
       "denoise": 0.15,
       "noiseSuppression": 0.8,

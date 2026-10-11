@@ -5,10 +5,32 @@
 use crate::buffer::{EngineError, LinearImage};
 use crate::exposure::{apply_exposure, MAX_EV};
 
+/// Whole-image values a tile must reuse so that it matches the full-frame result.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AdaptCtx {
+    /// Mean log2 luminance of the whole image, as the adaptive stage sees it.
+    pub target: f32,
+    /// Full image size, which sets the guided-filter radius.
+    pub full_dims: (usize, usize),
+}
+
+/// Sum and count of log2 luminance, so a tiled pass can build the whole-image mean.
+pub fn log_luma_sum(img: &LinearImage) -> (f64, usize) {
+    let sum: f64 = img.data().chunks_exact(4).map(|p| luma(p).max(LUMA_EPS).log2() as f64).sum();
+    (sum, img.data().len() / 4)
+}
+
 /// Largest per-pixel lift before the user gain, in stops. Proposed limit.
 pub const MAX_LIFT_EV: f32 = 3.0;
 /// Floor for log2 so black pixels stay finite.
 const LUMA_EPS: f32 = 1e-6;
+/// Guided-filter eps on log2 luminance. Structure with std below about 0.3 stop is treated as
+/// texture and smoothed out of the illumination base; bigger steps (light/shadow) are kept.
+/// Proposed.
+const BASE_EPS: f32 = 0.3 * 0.3;
+/// Fraction of the log-luminance gap to the global mean that full strength closes. At 1.0 the
+/// whole tonal range collapsed to one grey (quality_probe: tonal range 0.12x). Proposed.
+const TONE_COMPRESSION: f32 = 0.5;
 /// Regions are clamped to this range. Proposed.
 const MAX_REGIONS: u32 = 64;
 
@@ -46,6 +68,12 @@ impl AdaptiveExposure {
     /// Applies the adjustment in place. Out-of-range values are clamped; non-finite values are
     /// rejected before any pixel changes.
     pub fn apply(&self, img: &mut LinearImage) -> Result<(), EngineError> {
+        self.apply_with(img, None)
+    }
+
+    /// Like `apply`, but a tile can pass the whole-image target and size (see `tiled`). With `None`
+    /// the values come from `img` itself.
+    pub fn apply_with(&self, img: &mut LinearImage, ctx: Option<AdaptCtx>) -> Result<(), EngineError> {
         for (name, v) in [
             ("strength", self.strength),
             ("contrast", self.contrast),
@@ -65,8 +93,9 @@ impl AdaptiveExposure {
         }
 
         let (w, h) = (img.width(), img.height());
+        let (fw, fh) = ctx.map(|c| c.full_dims).unwrap_or((w, h));
         let regions = self.regions.clamp(1, MAX_REGIONS) as f32;
-        let radius = ((w.max(h) as f32 / regions) * 0.5).round().max(1.0) as usize;
+        let radius = ((fw.max(fh) as f32 / regions) * 0.5).round().max(1.0) as usize;
         let contrast_gain = 1.0 + self.contrast.clamp(-1.0, 1.0);
         let protect_hi = self.protect_highlights.clamp(0.0, 1.0);
         let protect_sh = self.protect_shadows.clamp(0.0, 1.0);
@@ -77,16 +106,21 @@ impl AdaptiveExposure {
             .chunks_exact(4)
             .map(|p| luma(p).max(LUMA_EPS).log2())
             .collect();
-        let target = log_luma.iter().sum::<f32>() / log_luma.len() as f32;
-        // Edge-aware local mean: keeps large brightness steps from producing halos.
-        let local = crate::guided::guided_filter(&log_luma, &log_luma, w, h, radius, 0.02 * 0.02);
+        let target = match ctx {
+            Some(c) => c.target,
+            None => log_luma.iter().sum::<f32>() / log_luma.len() as f32,
+        };
+        // Illumination base: edge-aware, but eps must be large enough that texture averages out.
+        // With the old eps (0.02^2) the base tracked every pixel, so lift = target - pixel and the
+        // whole image was pulled to one grey (global contrast fell to 0.12x in quality_probe).
+        let local = crate::guided::guided_filter_auto(&log_luma, &log_luma, w, h, radius, BASE_EPS);
 
         for (i, px) in img.data_mut().chunks_exact_mut(4).enumerate() {
             let y = luma(px);
             if !y.is_finite() {
                 continue;
             }
-            let mut lift = (target - local[i]).clamp(-MAX_LIFT_EV, MAX_LIFT_EV) * strength * contrast_gain;
+            let mut lift = (target - local[i]).clamp(-MAX_LIFT_EV, MAX_LIFT_EV) * strength * contrast_gain * TONE_COMPRESSION;
             if lift > 0.0 {
                 lift *= 1.0 - protect_hi * smoothstep(0.5, 1.0, y);
             } else if lift < 0.0 {
@@ -260,9 +294,89 @@ mod tests {
     }
 
     #[test]
+    fn full_strength_keeps_most_of_the_tonal_range() {
+        // Regression: full strength used to flatten a light-to-dark gradient to one grey.
+        let mut rgba = Vec::new();
+        for _y in 0..4 {
+            for x in 0..64 {
+                let v = 20 + (x * 220 / 63) as u8;
+                rgba.extend_from_slice(&[v, v, v, 255]);
+            }
+        }
+        let mut img = LinearImage::from_srgb8(64, 4, &rgba).unwrap();
+        let before = img.clone();
+        full(1.0).apply(&mut img).unwrap();
+        let span = |i: &LinearImage| px(i, 63, 1)[0] / px(i, 0, 1)[0];
+        let kept = span(&img).log2() / span(&before).log2();
+        assert!(kept > 0.4, "tonal range kept {kept:.2} of input");
+    }
+
+    #[test]
+    fn fine_texture_survives_full_lift() {
+        // Regression: the lift must act on the illumination, not on each pixel. A fine texture of
+        // about 0.15 stop (alternating 118 and 122) keeps its contrast after full adaptive exposure.
+        let mut rgba = Vec::new();
+        for _y in 0..16 {
+            for x in 0..64 {
+                let v = if x % 2 == 0 { 118 } else { 122 };
+                rgba.extend_from_slice(&[v, v, v, 255]);
+            }
+        }
+        let mut img = LinearImage::from_srgb8(64, 16, &rgba).unwrap();
+        let before = img.clone();
+        full(1.0).apply(&mut img).unwrap();
+        let contrast = |i: &LinearImage| (px(i, 20, 8)[0] / px(i, 21, 8)[0]).log2().abs();
+        assert!(contrast(&img) > 0.5 * contrast(&before), "texture was flattened");
+    }
+
+    #[test]
     fn box_blur_of_constant_is_constant() {
         let src = vec![1.5f32; 5 * 3];
         let out = box_blur(&src, 5, 3, 2);
         assert!(out.iter().all(|v| (v - 1.5).abs() < 1e-6));
+    }
+}
+
+#[cfg(test)]
+mod gate1_tests {
+    //! Gate 1: a dark tree against bright sky must not get a bright or dark halo.
+    use super::*;
+
+    /// 96x1 row: sky (sRGB 225) on the left, dark tree (sRGB 35) from x = 48 to the right edge,
+    /// with a small texture on the sky so the base is not trivially flat.
+    fn row() -> LinearImage {
+        let mut rgba = Vec::new();
+        for x in 0..96u32 {
+            let t = ((x * 37) % 9) as u8;
+            let v = if x < 48 { 222 + t / 3 } else { 35 + t / 3 };
+            rgba.extend_from_slice(&[v, v, v, 255]);
+        }
+        LinearImage::from_srgb8(96, 1, &rgba).unwrap()
+    }
+
+    fn lum(img: &LinearImage, x: usize) -> f32 {
+        luma(&img.data()[x * 4..])
+    }
+
+    #[test]
+    fn dark_tree_on_bright_sky_has_no_halo() {
+        let before = row();
+        let mut img = before.clone();
+        AdaptiveExposure { strength: 1.0, regions: 4, ..Default::default() }.apply(&mut img).unwrap();
+        // Compare each sample with its own plateau (mean of 6 samples, 10 px away from the edge).
+        let plateau = |i: &LinearImage, x0: usize, x1: usize| (x0..x1).map(|x| lum(i, x)).sum::<f32>() / (x1 - x0) as f32;
+        let step = (plateau(&before, 2, 8) - plateau(&before, 88, 94)).abs();
+        let sky_p = plateau(&img, 2, 8);
+        let tree_p = plateau(&img, 88, 94);
+        let worst = (40..56)
+            .map(|x| {
+                let dev = if x < 48 { lum(&img, x) - sky_p } else { lum(&img, x) - tree_p };
+                let dev0 = if x < 48 { lum(&before, x) - plateau(&before, 2, 8) } else { lum(&before, x) - plateau(&before, 88, 94) };
+                (dev - dev0).abs()
+            })
+            .fold(0.0f32, f32::max);
+        let ratio = worst / step;
+        eprintln!("gate1 halo: {:.2}% of the edge step", ratio * 100.0);
+        assert!(ratio < 0.03, "halo {:.1}% of the edge step", ratio * 100.0);
     }
 }

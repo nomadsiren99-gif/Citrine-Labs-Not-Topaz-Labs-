@@ -7,6 +7,7 @@ export type Sliders = {
   ev: number; basicContrast: number; boostBlacks: number; boostWhites: number;
   adaptive: number; adaptiveContrast: number; adaptiveRegions: number; adaptiveBrightness: number;
   protectHighlights: number; protectShadows: number;
+  hdrStrength: number; hdrDetail: number;
   details: number; detailBoost: number; detailThreshold: number; detailRadius: number; detailSharpen: number;
   processIndependently: boolean;
   adaptiveSaturation: number; saturation: number; saturationBoost: number; hue: number; colorRegions: number;
@@ -25,6 +26,7 @@ export const NEUTRAL: Sliders = {
   brush: [],
   ev: 0, basicContrast: 0, boostBlacks: 0, boostWhites: 0,
   adaptive: 0, adaptiveContrast: 0, adaptiveRegions: 4, adaptiveBrightness: 0, protectHighlights: 0, protectShadows: 0,
+  hdrStrength: 0, hdrDetail: 1,
   details: 1, detailBoost: 1, detailThreshold: 0.5, detailRadius: 1.5, detailSharpen: 0, processIndependently: false,
   adaptiveSaturation: 0, saturation: 1, saturationBoost: 0, hue: 0, colorRegions: 1,
   denoise: 0, noiseSuppression: 1,
@@ -53,6 +55,10 @@ export const SECTIONS: Section[] = [
     { key: "adaptiveBrightness", label: "Brightness (EV)", min: -2, max: 2, step: 0.01 },
     { key: "protectHighlights", label: "Protect Highlights", min: 0, max: 1, step: 0.01 },
     { key: "protectShadows", label: "Protect Shadows", min: 0, max: 1, step: 0.01 },
+  ]},
+  { id: "hdr", title: "HDR Tone Mapping", sliders: [
+    { key: "hdrStrength", label: "Compression", min: 0, max: 1, step: 0.01 },
+    { key: "hdrDetail", label: "Detail", min: 0, max: 2, step: 0.01 },
   ]},
   { id: "details", title: "Details & Clarity", sliders: [
     { key: "details", label: "Strength", min: 0, max: 2, step: 0.01 },

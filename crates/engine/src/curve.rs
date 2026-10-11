@@ -153,3 +153,70 @@ mod tests {
         assert!(Curve { points: vec![(0.5, 0.5), (0.5, 0.9)] }.apply(&mut img).is_err());
     }
 }
+
+#[cfg(test)]
+mod gate4_tests {
+    //! Gate 4: curves stay monotone where the points are monotone, and continuous everywhere.
+    use super::*;
+
+    fn lcg(s: &mut u32) -> f32 {
+        *s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        (*s >> 8) as f32 / (1u32 << 24) as f32
+    }
+
+    /// 1024x1 grey ramp, sRGB 0..255 across the width.
+    fn ramp() -> LinearImage {
+        let mut rgba = Vec::with_capacity(1024 * 4);
+        for x in 0..1024u32 {
+            let v = (x * 255 / 1023) as u8;
+            rgba.extend_from_slice(&[v, v, v, 255]);
+        }
+        LinearImage::from_srgb8(1024, 1, &rgba).unwrap()
+    }
+
+    #[test]
+    fn monotone_points_give_monotone_output() {
+        let mut s = 99u32;
+        for trial in 0..200 {
+            // Random increasing x and y, endpoints fixed at (0,0) and (1,1).
+            let mut xs: Vec<f32> = (0..4).map(|_| lcg(&mut s)).collect();
+            let mut ys: Vec<f32> = (0..4).map(|_| lcg(&mut s)).collect();
+            xs.sort_by(f32::total_cmp);
+            ys.sort_by(f32::total_cmp);
+            let mut points = vec![(0.0, 0.0)];
+            points.extend(xs.iter().zip(&ys).map(|(&x, &y)| (x.clamp(0.01, 0.99), y)));
+            points.push((1.0, 1.0));
+
+            let mut img = ramp();
+            Curve { points: points.clone() }.apply(&mut img).unwrap();
+            let out: Vec<f32> = img.data().chunks_exact(4).map(luma).collect();
+            let input: Vec<f32> = ramp().data().chunks_exact(4).map(luma).collect();
+            // Ignore the first and last few pixels, where the input luma is tiny.
+            for i in 2..out.len() - 2 {
+                assert!(out[i + 1] + 1e-4 >= out[i], "trial {trial}: dropped at {i} for {points:?}");
+            }
+            assert!(out.iter().zip(&input).all(|(o, i)| o.is_finite() && *o >= 0.0 && *i >= 0.0));
+        }
+    }
+}
+
+#[cfg(test)]
+mod gentle_curve_tests {
+    use super::*;
+
+    #[test]
+    fn gentle_curve_has_no_visible_steps() {
+        // Small S-curve near identity: adjacent output pixels must not jump.
+        let mut rgba = Vec::new();
+        for x in 0..1024u32 {
+            let v = (x * 255 / 1023) as u8;
+            rgba.extend_from_slice(&[v, v, v, 255]);
+        }
+        let mut img = LinearImage::from_srgb8(1024, 1, &rgba).unwrap();
+        Curve { points: vec![(0.0, 0.0), (0.25, 0.2), (0.75, 0.8), (1.0, 1.0)] }.apply(&mut img).unwrap();
+        let out: Vec<f32> = img.data().chunks_exact(4).map(luma).collect();
+        for i in 2..out.len() - 2 {
+            assert!((out[i + 1] - out[i]).abs() < 0.02, "jump at {i}");
+        }
+    }
+}

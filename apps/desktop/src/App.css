@@ -1,10 +1,10 @@
 :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #15161a; color: #e6e6e6; }
 body { margin: 0; }
 .app { display: grid; grid-template-columns: 200px 1fr 280px; height: 100vh; }
-.left, .right { background: #1d1f25; padding: 12px; overflow-y: auto; }
+.left, .right { background: #1d1f25; padding: 12px; overflow-y: auto; box-sizing: border-box; height: 100%; }
 .left button, .right > button { display: block; width: 100%; margin: 4px 0; padding: 6px; background: #2a2d36; color: inherit; border: 0; border-radius: 4px; text-align: left; }
 .left button.sel { background: #00a6d6; color: #001018; }
-.center { display: flex; flex-direction: column; padding: 12px; gap: 8px; min-width: 0; }
+.center { display: flex; flex-direction: column; padding: 12px; gap: 8px; min-width: 0; height: 100%; box-sizing: border-box; overflow: hidden; }
 .toolbar { display: flex; gap: 8px; }
 .toolbar input { flex: 1; padding: 6px; background: #0f1014; color: inherit; border: 1px solid #333; border-radius: 4px; }
 .viewport { flex: 1; display: flex; align-items: center; justify-content: center; background: #0a0b0d; min-height: 0; }
@@ -17,7 +17,7 @@ body { margin: 0; }
 @media (max-width: 800px) { .app { grid-template-columns: 1fr; } }
 .spacer { flex: 1; }
 .histogram { height: 60px; width: 100%; background: #0a0b0d; }
-.viewport { overflow: auto; }
+.viewport { overflow: hidden; }
 .viewport.zoom-fit img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .section { border-bottom: 1px solid #2a2d36; padding: 4px 0; }
 .section header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 6px 0; font-size: 14px; }
@@ -40,8 +40,37 @@ select { background: #0f1014; color: inherit; border: 1px solid #333; border-rad
 .chan { display: flex; gap: 4px; margin: 4px 0; }
 .chan button { padding: 2px 8px; font-size: 12px; background: #2a2d36; color: inherit; border: 0; border-radius: 3px; }
 .chan button.sel { background: #00a6d6; color: #001018; }
-.histogram { display: block; width: 100%; height: 60px; background: #0a0b0d; }
+.histogram { display: block; width: 100%; height: clamp(40px, 13vh, 130px); flex: 0 0 auto; background: #0a0b0d; }
 .curvebox { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .curve { display: block; background: #0a0b0d; border: 1px solid #2a2d36; cursor: crosshair; touch-action: none; }
 .curvebar { display: flex; justify-content: space-between; width: 256px; font-size: 12px; }
 .curvebar button { padding: 2px 8px; }
+
+/* Real zoom: a full-resolution crop that is panned by dragging. */
+.viewport.crop { position: relative; overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
+.viewport.crop:active { cursor: grabbing; }
+.viewport.crop img { max-width: none; max-height: none; pointer-events: none; image-rendering: pixelated; }
+.viewport.crop .crop-info { position: absolute; left: 8px; bottom: 8px; font-size: 12px; color: #cfd3d8; background: rgba(0, 0, 0, 0.55); padding: 2px 6px; border-radius: 4px; }
+
+/* Before/after divider, Limestone style: a draggable line over the image. */
+.viewport.split { position: relative; overflow: hidden; cursor: ew-resize; touch-action: none; user-select: none; }
+.compare { position: relative; display: inline-block; max-width: 100%; max-height: 100%; line-height: 0; }
+.compare img { display: block; max-width: 100%; max-height: 100%; }
+.compare img + img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.wipe-line { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fff; pointer-events: none; }
+.wipe-line span { position: absolute; top: 50%; left: -16px; width: 32px; height: 32px; border-radius: 50%; background: #fff; color: #222; font-size: 13px; line-height: 32px; text-align: center; transform: translateY(-50%); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
+.compare .tag { position: absolute; top: 8px; padding: 2px 9px; border-radius: 12px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 12px; line-height: 18px; }
+.compare .tag.l { left: 8px; }
+.compare .tag.r { right: 8px; }
+
+/* Hue wheel: a ring with a dot at the chosen angle. */
+.hue-box { display: flex; flex-direction: column; align-items: center; margin: 6px 0 10px; }
+.hue-wheel { position: relative; width: 140px; height: 140px; border-radius: 50%; touch-action: none; cursor: crosshair;
+  background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+.hue-wheel::after { content: ""; position: absolute; inset: 30px; border-radius: 50%; background: #2a2b2f; pointer-events: none; }
+.hue-dot { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px; border-radius: 50%;
+  background: #fff; border: 2px solid #222; pointer-events: none; z-index: 1; }
+
+/* Brand block at the top of the left panel: white Citrine logo on the dark UI. */
+.brand { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 8px 4px; }
+.brand img { width: 120px; }

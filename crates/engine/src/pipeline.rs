@@ -80,6 +80,7 @@ pub struct Look {
     pub basic: BasicExposure,
     pub adaptive: AdaptiveExposure,
     pub details: Details,
+    pub hdr: crate::hdr::Hdr,
     pub color: ColorAdjust,
     pub denoise: Denoise,
     pub curve: Curve,
@@ -98,6 +99,7 @@ pub fn apply_look(img: &mut LinearImage, look: &Look) -> Result<(), EngineError>
     apply_exposure(img, look.ev)?;
     look.basic.apply(img)?;
     apply(img, &look.adaptive, &look.details)?;
+    look.hdr.apply_with(img, None);
     look.color.apply(img)?;
     look.denoise.apply(img)?;
     look.curve.apply(img)?;

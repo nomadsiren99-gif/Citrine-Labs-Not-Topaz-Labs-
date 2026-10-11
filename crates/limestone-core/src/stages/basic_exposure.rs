@@ -1,5 +1,5 @@
-use crate::limestone_exact::image_buffer::RgbImageF32;
-use crate::limestone_exact::params::BasicExposureParams;
+use crate::image_buffer::RgbImageF32;
+use crate::params::BasicExposureParams;
 use rayon::prelude::*;
 
 pub fn apply_basic_exposure(img: &mut RgbImageF32, params: &BasicExposureParams) {

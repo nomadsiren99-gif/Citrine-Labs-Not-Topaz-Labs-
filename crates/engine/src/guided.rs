@@ -5,6 +5,12 @@
 
 use crate::adaptive_exposure::box_blur;
 
+/// Guided filter on the GPU when an adapter exists, otherwise on the CPU. Both give the same
+/// result to about 1e-4 (see the parity tests in `gpu`).
+pub fn guided_filter_auto(guidance: &[f32], src: &[f32], w: usize, h: usize, radius: usize, eps: f32) -> Vec<f32> {
+    crate::gpu::guided_filter(guidance, src, w, h, radius, eps).unwrap_or_else(|| guided_filter(guidance, src, w, h, radius, eps))
+}
+
 pub fn guided_filter(guidance: &[f32], src: &[f32], w: usize, h: usize, radius: usize, eps: f32) -> Vec<f32> {
     let mean_i = box_blur(guidance, w, h, radius);
     let mean_p = box_blur(src, w, h, radius);

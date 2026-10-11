@@ -1,0 +1,253 @@
+photo,recipe,description,texture_ratio,clip_added,crush_added,mean_luma_shift,tonal_unimplemented
+backlit_joshua_tree,R01,backlight recovery,0.921,-0.0001,-0.0000,-0.73,false
+backlit_joshua_tree,R02,everyday improvement,0.912,-0.0001,0.0000,-0.81,false
+backlit_joshua_tree,R03,wider tone and colour,0.871,-0.0001,0.0000,-1.20,false
+backlit_joshua_tree,R04,crisp subtle contrast,1.000,0.0000,0.0000,+0.00,false
+backlit_joshua_tree,R05,soft colour lift,1.000,0.0000,0.0000,+0.01,false
+backlit_joshua_tree,R06,gentler skin,0.984,-0.0000,0.0000,-0.05,false
+backlit_joshua_tree,R07,moody portrait,0.884,-0.0001,0.0000,-2.68,false
+backlit_joshua_tree,R08,shadow and light separation,1.000,0.0000,0.0000,+0.00,false
+backlit_joshua_tree,R09,surface clarity,1.000,0.0000,0.0000,+0.00,false
+backlit_joshua_tree,R10,controlled HDR contrast,0.773,-0.0001,-0.0000,-3.99,false
+backlit_joshua_tree,R11,fine texture,1.000,0.0000,0.0000,-0.00,false
+backlit_joshua_tree,R12,mid-scale texture,1.000,0.0000,0.0000,+0.00,false
+backlit_joshua_tree,R13,detail respecting noise,0.922,-0.0001,-0.0000,-0.73,false
+backlit_joshua_tree,R14,smooth simplification,0.987,-0.0000,0.0000,-0.03,false
+backlit_joshua_tree,R15,flattened texture,0.986,-0.0000,0.0000,-0.02,false
+backlit_joshua_tree,R16,hyperreal pseudo-HDR,0.784,-0.0001,-0.0000,-1.95,false
+backlit_joshua_tree,R17,muted-colour presence,1.000,0.0000,0.0000,-0.03,false
+backlit_joshua_tree,R18,surreal colour,1.002,0.0000,0.0000,-0.35,false
+backlit_joshua_tree,R19,balanced lighting,0.843,-0.0001,-0.0000,-1.41,false
+backlit_joshua_tree,R20,very saturated,0.999,0.0000,0.0000,-0.20,false
+backlit_joshua_tree,R21,rich clarity,1.000,0.0000,0.0000,+0.00,false
+backlit_joshua_tree,R22,vivid bright tone,0.806,-0.0001,-0.0000,+1.92,false
+backlit_joshua_tree,R23,punched-up dynamism,0.784,-0.0001,-0.0000,-1.90,false
+backlit_joshua_tree,R24,high-energy HDR,0.751,-0.0001,-0.0000,-2.15,false
+backlit_joshua_tree,R25,graphic illustration,0.723,-0.0001,-0.0000,-2.17,false
+backlit_joshua_tree,R26,mild detail,1.000,0.0000,0.0000,+0.00,false
+backlit_joshua_tree,R27,heavy detail,1.000,0.0000,0.0000,-0.00,false
+backlit_joshua_tree,R28,gentle highlight recovery,0.941,-0.0001,0.0000,-0.56,false
+backlit_joshua_tree,R29,shadow lift,0.921,-0.0001,-0.0000,-0.73,false
+backlit_joshua_tree,R30,lo-fi punch and edges,1.000,-0.0000,0.0000,-3.96,false
+backlit_joshua_tree,R31,crossed analog colours,1.000,0.0000,0.0000,-0.07,true
+backlit_joshua_tree,R32,grainy faded vintage,1.006,0.0000,0.0000,-3.51,false
+backlit_joshua_tree,R33,cool tungsten cast,1.000,-0.0000,0.0000,-0.00,false
+backlit_joshua_tree,R34,bold stylised edges,1.000,0.0000,0.0000,-0.19,true
+backlit_joshua_tree,R35,painterly glow,0.830,-0.0001,-0.0000,-1.63,false
+backlit_joshua_tree,R36,high-contrast monochrome,0.997,0.0000,0.0000,-3.20,false
+backlit_joshua_tree,R37,washed retro,1.000,-0.0000,0.0000,+0.15,false
+backlit_joshua_tree,R38,moody low key,0.927,-0.0001,0.0000,-12.22,false
+backlit_joshua_tree,R39,cold diffuse atmosphere,0.948,-0.0001,0.0000,-6.50,false
+backlit_joshua_tree,R40,dark and dramatic,0.903,-0.0001,0.0000,-16.29,false
+backlit_joshua_tree,R41,blue-toned grade,1.000,-0.0000,0.0000,-0.07,true
+backlit_joshua_tree,R42,deep shadow grade,0.949,-0.0001,0.0000,-8.98,true
+backlit_birch_tree,R01,backlight recovery,0.922,-0.0004,0.0000,-3.17,false
+backlit_birch_tree,R02,everyday improvement,0.914,-0.0004,0.0000,-3.56,false
+backlit_birch_tree,R03,wider tone and colour,0.873,-0.0004,0.0000,-5.12,false
+backlit_birch_tree,R04,crisp subtle contrast,1.000,0.0000,0.0000,+0.00,false
+backlit_birch_tree,R05,soft colour lift,1.000,-0.0000,0.0000,-0.03,false
+backlit_birch_tree,R06,gentler skin,0.986,0.0005,0.0000,+0.76,false
+backlit_birch_tree,R07,moody portrait,0.886,-0.0004,0.0000,-6.78,false
+backlit_birch_tree,R08,shadow and light separation,1.000,0.0000,0.0000,+0.00,false
+backlit_birch_tree,R09,surface clarity,1.000,0.0000,0.0000,+0.00,false
+backlit_birch_tree,R10,controlled HDR contrast,0.777,-0.0004,0.0000,-11.28,false
+backlit_birch_tree,R11,fine texture,1.002,0.0000,0.0000,+0.00,false
+backlit_birch_tree,R12,mid-scale texture,1.000,0.0000,0.0000,-0.00,false
+backlit_birch_tree,R13,detail respecting noise,0.924,-0.0004,0.0000,-3.17,false
+backlit_birch_tree,R14,smooth simplification,0.984,0.0038,0.0000,+1.17,false
+backlit_birch_tree,R15,flattened texture,0.995,-0.0001,0.0000,-0.01,false
+backlit_birch_tree,R16,hyperreal pseudo-HDR,0.789,-0.0004,0.0000,-8.34,false
+backlit_birch_tree,R17,muted-colour presence,1.000,0.0000,0.0000,-0.04,false
+backlit_birch_tree,R18,surreal colour,1.002,0.0000,0.0000,-0.30,false
+backlit_birch_tree,R19,balanced lighting,0.846,-0.0004,0.0000,-6.15,false
+backlit_birch_tree,R20,very saturated,1.000,0.0000,0.0000,-0.16,false
+backlit_birch_tree,R21,rich clarity,1.000,0.0000,0.0000,+0.00,false
+backlit_birch_tree,R22,vivid bright tone,0.809,-0.0004,0.0000,-3.91,false
+backlit_birch_tree,R23,punched-up dynamism,0.787,-0.0004,0.0000,-8.27,false
+backlit_birch_tree,R24,high-energy HDR,0.755,-0.0004,0.0000,-9.43,false
+backlit_birch_tree,R25,graphic illustration,0.730,-0.0004,0.0000,-10.18,false
+backlit_birch_tree,R26,mild detail,1.000,0.0000,0.0000,-0.00,false
+backlit_birch_tree,R27,heavy detail,1.001,0.0000,0.0000,+0.00,false
+backlit_birch_tree,R28,gentle highlight recovery,0.942,-0.0004,0.0000,-2.40,false
+backlit_birch_tree,R29,shadow lift,0.922,-0.0004,0.0000,-3.17,false
+backlit_birch_tree,R30,lo-fi punch and edges,1.000,0.0001,0.0000,-5.49,false
+backlit_birch_tree,R31,crossed analog colours,1.000,0.0000,0.0000,-0.05,true
+backlit_birch_tree,R32,grainy faded vintage,1.006,0.0012,0.0000,-4.98,false
+backlit_birch_tree,R33,cool tungsten cast,1.000,-0.0001,0.0000,-0.14,false
+backlit_birch_tree,R34,bold stylised edges,1.001,0.0000,0.0000,-0.14,true
+backlit_birch_tree,R35,painterly glow,0.833,-0.0004,0.0000,-6.69,false
+backlit_birch_tree,R36,high-contrast monochrome,1.001,0.0001,0.0000,-4.87,false
+backlit_birch_tree,R37,washed retro,1.001,0.0002,0.0000,+0.08,false
+backlit_birch_tree,R38,moody low key,0.927,-0.0004,0.0000,-15.15,false
+backlit_birch_tree,R39,cold diffuse atmosphere,0.944,-0.0004,0.0000,-7.52,false
+backlit_birch_tree,R40,dark and dramatic,0.904,-0.0004,0.0000,-20.21,false
+backlit_birch_tree,R41,blue-toned grade,1.000,-0.0001,0.0000,-0.09,true
+backlit_birch_tree,R42,deep shadow grade,0.949,-0.0004,0.0000,-11.22,true
+forest_floor_leaves,R01,backlight recovery,0.909,-0.0008,-0.0146,-1.95,false
+forest_floor_leaves,R02,everyday improvement,0.898,-0.0008,-0.0146,-2.30,false
+forest_floor_leaves,R03,wider tone and colour,0.852,-0.0008,-0.0198,-3.41,false
+forest_floor_leaves,R04,crisp subtle contrast,1.000,0.0000,0.0000,+0.00,false
+forest_floor_leaves,R05,soft colour lift,1.000,-0.0000,-0.0005,-0.05,false
+forest_floor_leaves,R06,gentler skin,0.992,0.0009,-0.0000,+0.08,false
+forest_floor_leaves,R07,moody portrait,0.867,-0.0008,-0.0166,-3.92,false
+forest_floor_leaves,R08,shadow and light separation,1.000,0.0000,0.0000,+0.00,false
+forest_floor_leaves,R09,surface clarity,1.000,0.0000,0.0000,+0.00,false
+forest_floor_leaves,R10,controlled HDR contrast,0.746,-0.0008,-0.0270,-6.64,false
+forest_floor_leaves,R11,fine texture,1.001,0.0000,0.0000,+0.00,false
+forest_floor_leaves,R12,mid-scale texture,1.000,0.0000,0.0000,+0.00,false
+forest_floor_leaves,R13,detail respecting noise,0.910,-0.0008,-0.0146,-2.09,false
+forest_floor_leaves,R14,smooth simplification,0.993,0.0012,-0.0001,+0.13,false
+forest_floor_leaves,R15,flattened texture,0.993,-0.0001,0.0000,+0.12,false
+forest_floor_leaves,R16,hyperreal pseudo-HDR,0.760,-0.0008,-0.0282,-5.18,false
+forest_floor_leaves,R17,muted-colour presence,0.999,-0.0000,0.0003,-0.11,false
+forest_floor_leaves,R18,surreal colour,1.007,0.0002,0.0031,-1.33,false
+forest_floor_leaves,R19,balanced lighting,0.824,-0.0008,-0.0201,-3.73,false
+forest_floor_leaves,R20,very saturated,1.000,-0.0001,0.0017,-0.61,false
+forest_floor_leaves,R21,rich clarity,1.000,0.0000,0.0000,+0.00,false
+forest_floor_leaves,R22,vivid bright tone,0.782,-0.0008,-0.0284,-2.90,false
+forest_floor_leaves,R23,punched-up dynamism,0.757,-0.0008,-0.0283,-5.39,false
+forest_floor_leaves,R24,high-energy HDR,0.726,-0.0008,-0.0285,-5.45,false
+forest_floor_leaves,R25,graphic illustration,0.695,-0.0008,-0.0285,-6.22,false
+forest_floor_leaves,R26,mild detail,1.000,0.0000,0.0000,+0.00,false
+forest_floor_leaves,R27,heavy detail,1.001,0.0000,0.0000,+0.00,false
+forest_floor_leaves,R28,gentle highlight recovery,0.932,-0.0008,-0.0091,-1.62,false
+forest_floor_leaves,R29,shadow lift,0.910,-0.0008,-0.0146,-1.74,false
+forest_floor_leaves,R30,lo-fi punch and edges,0.999,-0.0006,0.0054,-2.37,false
+forest_floor_leaves,R31,crossed analog colours,1.001,-0.0000,-0.0005,-0.18,true
+forest_floor_leaves,R32,grainy faded vintage,1.003,-0.0005,0.0048,-1.79,false
+forest_floor_leaves,R33,cool tungsten cast,1.001,0.0000,0.0013,+0.04,false
+forest_floor_leaves,R34,bold stylised edges,0.999,-0.0002,0.0003,-0.48,true
+forest_floor_leaves,R35,painterly glow,0.809,-0.0008,-0.0222,-4.64,false
+forest_floor_leaves,R36,high-contrast monochrome,1.000,-0.0006,0.0076,-1.50,false
+forest_floor_leaves,R37,washed retro,0.999,-0.0000,-0.0002,+0.50,false
+forest_floor_leaves,R38,moody low key,0.926,-0.0008,0.0152,-7.14,false
+forest_floor_leaves,R39,cold diffuse atmosphere,0.946,-0.0008,0.0052,-3.38,false
+forest_floor_leaves,R40,dark and dramatic,0.902,-0.0008,0.0210,-9.52,false
+forest_floor_leaves,R41,blue-toned grade,1.000,-0.0005,0.0025,+0.12,true
+forest_floor_leaves,R42,deep shadow grade,0.948,-0.0008,0.0099,-5.14,true
+train_interior,R01,backlight recovery,0.912,-0.0069,-0.0045,-2.93,false
+train_interior,R02,everyday improvement,0.902,-0.0069,-0.0045,-3.34,false
+train_interior,R03,wider tone and colour,0.858,-0.0069,-0.0045,-4.80,false
+train_interior,R04,crisp subtle contrast,1.000,0.0000,0.0000,+0.00,false
+train_interior,R05,soft colour lift,1.000,-0.0000,0.0000,-0.04,false
+train_interior,R06,gentler skin,0.990,0.0006,0.0000,+0.11,false
+train_interior,R07,moody portrait,0.872,-0.0069,-0.0007,-5.72,false
+train_interior,R08,shadow and light separation,1.000,0.0000,0.0000,+0.00,false
+train_interior,R09,surface clarity,1.000,0.0000,0.0000,+0.00,false
+train_interior,R10,controlled HDR contrast,0.756,-0.0069,-0.0047,-9.82,false
+train_interior,R11,fine texture,1.002,0.0000,0.0000,+0.00,false
+train_interior,R12,mid-scale texture,1.000,0.0000,0.0000,+0.00,false
+train_interior,R13,detail respecting noise,0.914,-0.0069,-0.0045,-2.97,false
+train_interior,R14,smooth simplification,0.990,0.0010,0.0000,+0.17,false
+train_interior,R15,flattened texture,0.994,-0.0002,0.0000,+0.02,false
+train_interior,R16,hyperreal pseudo-HDR,0.769,-0.0069,-0.0057,-7.74,false
+train_interior,R17,muted-colour presence,1.000,0.0000,0.0000,-0.04,false
+train_interior,R18,surreal colour,1.007,0.0001,0.0028,-0.07,false
+train_interior,R19,balanced lighting,0.829,-0.0069,-0.0045,-5.69,false
+train_interior,R20,very saturated,1.001,-0.0000,0.0000,-0.10,false
+train_interior,R21,rich clarity,1.000,0.0000,0.0000,+0.00,false
+train_interior,R22,vivid bright tone,0.788,-0.0069,-0.0058,-4.52,false
+train_interior,R23,punched-up dynamism,0.766,-0.0069,-0.0058,-7.78,false
+train_interior,R24,high-energy HDR,0.733,-0.0069,-0.0058,-8.71,false
+train_interior,R25,graphic illustration,0.707,-0.0069,-0.0058,-9.63,false
+train_interior,R26,mild detail,1.000,0.0000,0.0000,+0.00,false
+train_interior,R27,heavy detail,1.001,0.0000,0.0000,+0.00,false
+train_interior,R28,gentle highlight recovery,0.934,-0.0069,-0.0045,-2.26,false
+train_interior,R29,shadow lift,0.913,-0.0069,-0.0045,-2.88,false
+train_interior,R30,lo-fi punch and edges,1.002,-0.0027,0.0052,-3.48,false
+train_interior,R31,crossed analog colours,1.001,-0.0000,0.0000,-0.02,true
+train_interior,R32,grainy faded vintage,1.021,-0.0036,0.0052,-3.18,false
+train_interior,R33,cool tungsten cast,1.001,-0.0002,-0.0000,-0.05,false
+train_interior,R34,bold stylised edges,1.004,-0.0000,0.0000,-0.13,true
+train_interior,R35,painterly glow,0.817,-0.0069,-0.0045,-6.29,false
+train_interior,R36,high-contrast monochrome,0.996,-0.0023,0.0078,-3.15,false
+train_interior,R37,washed retro,1.001,-0.0001,0.0000,+0.03,false
+train_interior,R38,moody low key,0.927,-0.0069,0.0058,-10.81,false
+train_interior,R39,cold diffuse atmosphere,0.944,-0.0053,0.0034,-5.66,false
+train_interior,R40,dark and dramatic,0.902,-0.0069,0.0111,-14.41,false
+train_interior,R41,blue-toned grade,0.999,-0.0001,0.0000,-0.12,true
+train_interior,R42,deep shadow grade,0.948,-0.0069,0.0056,-7.97,true
+night_skyline,R01,backlight recovery,0.916,0.0000,-0.1324,-1.74,false
+night_skyline,R02,everyday improvement,0.906,0.0000,-0.1324,-2.01,false
+night_skyline,R03,wider tone and colour,0.866,0.0000,-0.1324,-3.03,false
+night_skyline,R04,crisp subtle contrast,1.000,0.0000,0.0000,+0.00,false
+night_skyline,R05,soft colour lift,1.000,0.0000,0.0000,-0.11,false
+night_skyline,R06,gentler skin,0.997,0.0000,0.0000,+0.03,false
+night_skyline,R07,moody portrait,0.878,0.0000,-0.1278,-3.28,false
+night_skyline,R08,shadow and light separation,1.000,0.0000,0.0000,+0.00,false
+night_skyline,R09,surface clarity,1.000,0.0000,0.0000,-0.00,false
+night_skyline,R10,controlled HDR contrast,0.769,0.0000,-0.1866,-5.47,false
+night_skyline,R11,fine texture,1.000,0.0000,0.0000,+0.00,false
+night_skyline,R12,mid-scale texture,1.000,0.0000,0.0000,-0.00,false
+night_skyline,R13,detail respecting noise,0.917,0.0000,-0.1324,-1.97,false
+night_skyline,R14,smooth simplification,0.997,0.0000,0.0000,+0.05,false
+night_skyline,R15,flattened texture,0.996,0.0000,0.0000,+0.28,false
+night_skyline,R16,hyperreal pseudo-HDR,0.778,0.0000,-0.2222,-4.43,false
+night_skyline,R17,muted-colour presence,1.001,0.0000,0.0000,+0.05,false
+night_skyline,R18,surreal colour,0.999,0.0000,0.0162,-0.82,false
+night_skyline,R19,balanced lighting,0.836,0.0000,-0.2101,-3.25,false
+night_skyline,R20,very saturated,1.000,0.0000,0.0000,-0.71,false
+night_skyline,R21,rich clarity,1.000,0.0000,0.0000,-0.00,false
+night_skyline,R22,vivid bright tone,0.801,0.0000,-0.2222,-3.12,false
+night_skyline,R23,punched-up dynamism,0.781,0.0000,-0.2222,-4.79,false
+night_skyline,R24,high-energy HDR,0.745,0.0000,-0.2222,-4.16,false
+night_skyline,R25,graphic illustration,0.723,0.0000,-0.2222,-5.22,false
+night_skyline,R26,mild detail,1.000,0.0000,0.0000,-0.00,false
+night_skyline,R27,heavy detail,1.000,0.0000,0.0000,+0.00,false
+night_skyline,R28,gentle highlight recovery,0.937,0.0000,-0.1324,-1.41,false
+night_skyline,R29,shadow lift,0.915,0.0000,-0.1324,-1.36,false
+night_skyline,R30,lo-fi punch and edges,0.998,0.0000,0.0064,-0.94,false
+night_skyline,R31,crossed analog colours,1.000,0.0000,0.0000,-0.67,true
+night_skyline,R32,grainy faded vintage,0.999,0.0001,0.0239,-0.19,false
+night_skyline,R33,cool tungsten cast,0.999,0.0000,0.0000,-0.16,false
+night_skyline,R34,bold stylised edges,0.984,0.0000,-0.0000,-1.17,true
+night_skyline,R35,painterly glow,0.826,0.0000,-0.2191,-4.81,false
+night_skyline,R36,high-contrast monochrome,0.989,0.0000,0.1297,+0.49,false
+night_skyline,R37,washed retro,0.997,0.0000,0.0000,+1.20,false
+night_skyline,R38,moody low key,0.924,0.0000,0.1303,-3.79,false
+night_skyline,R39,cold diffuse atmosphere,0.945,0.0000,0.1251,-1.32,false
+night_skyline,R40,dark and dramatic,0.899,0.0000,0.1904,-5.04,false
+night_skyline,R41,blue-toned grade,1.000,0.0000,0.0000,+0.23,true
+night_skyline,R42,deep shadow grade,0.946,0.0000,0.1264,-2.56,true
+portrait_studio,R01,backlight recovery,0.951,0.0000,-0.0006,-2.19,false
+portrait_studio,R02,everyday improvement,0.949,0.0000,-0.0006,-2.41,false
+portrait_studio,R03,wider tone and colour,0.922,0.0000,-0.0007,-3.53,false
+portrait_studio,R04,crisp subtle contrast,1.000,0.0000,0.0000,-0.00,false
+portrait_studio,R05,soft colour lift,1.000,0.0000,-0.0000,-0.06,false
+portrait_studio,R06,gentler skin,0.979,0.0000,0.0000,+0.04,false
+portrait_studio,R07,moody portrait,0.929,0.0000,-0.0007,-4.91,false
+portrait_studio,R08,shadow and light separation,1.000,0.0000,0.0000,+0.00,false
+portrait_studio,R09,surface clarity,1.005,0.0000,0.0000,-0.01,false
+portrait_studio,R10,controlled HDR contrast,0.874,0.0000,-0.0009,-8.02,false
+portrait_studio,R11,fine texture,1.016,0.0000,0.0000,-0.01,false
+portrait_studio,R12,mid-scale texture,1.003,0.0000,0.0000,-0.00,false
+portrait_studio,R13,detail respecting noise,0.963,0.0000,-0.0006,-2.21,false
+portrait_studio,R14,smooth simplification,0.983,0.0000,0.0000,+0.08,false
+portrait_studio,R15,flattened texture,0.977,0.0000,0.0000,+0.04,false
+portrait_studio,R16,hyperreal pseudo-HDR,0.887,0.0000,-0.0009,-5.78,false
+portrait_studio,R17,muted-colour presence,0.999,0.0000,0.0000,-0.09,false
+portrait_studio,R18,surreal colour,1.002,0.0000,0.0000,-0.51,false
+portrait_studio,R19,balanced lighting,0.907,0.0000,-0.0008,-4.22,false
+portrait_studio,R20,very saturated,1.001,0.0000,0.0000,-0.26,false
+portrait_studio,R21,rich clarity,1.005,0.0000,0.0000,-0.01,false
+portrait_studio,R22,vivid bright tone,0.899,0.0000,-0.0009,-1.87,false
+portrait_studio,R23,punched-up dynamism,0.872,0.0000,-0.0009,-5.64,false
+portrait_studio,R24,high-energy HDR,0.859,0.0000,-0.0010,-6.42,false
+portrait_studio,R25,graphic illustration,0.853,0.0000,-0.0010,-6.62,false
+portrait_studio,R26,mild detail,1.003,0.0000,0.0000,-0.00,false
+portrait_studio,R27,heavy detail,1.014,0.0000,0.0000,-0.01,false
+portrait_studio,R28,gentle highlight recovery,0.964,0.0000,-0.0005,-1.66,false
+portrait_studio,R29,shadow lift,0.952,0.0000,-0.0006,-2.19,false
+portrait_studio,R30,lo-fi punch and edges,1.003,0.0000,0.0000,-4.44,false
+portrait_studio,R31,crossed analog colours,1.001,0.0000,-0.0000,-0.08,true
+portrait_studio,R32,grainy faded vintage,1.032,0.0000,0.0000,-3.79,false
+portrait_studio,R33,cool tungsten cast,1.004,0.0000,0.0000,+0.08,false
+portrait_studio,R34,bold stylised edges,1.016,0.0000,0.0000,-0.33,true
+portrait_studio,R35,painterly glow,0.909,0.0000,-0.0008,-4.70,false
+portrait_studio,R36,high-contrast monochrome,1.005,0.0000,0.0002,-2.86,false
+portrait_studio,R37,washed retro,1.002,0.0000,-0.0000,+0.38,false
+portrait_studio,R38,moody low key,0.925,0.0000,0.0009,-12.74,false
+portrait_studio,R39,cold diffuse atmosphere,0.946,0.0000,0.0003,-6.40,false
+portrait_studio,R40,dark and dramatic,0.900,0.0000,0.0013,-16.97,false
+portrait_studio,R41,blue-toned grade,1.001,0.0000,0.0001,+0.13,true
+portrait_studio,R42,deep shadow grade,0.947,0.0000,0.0005,-9.33,true
