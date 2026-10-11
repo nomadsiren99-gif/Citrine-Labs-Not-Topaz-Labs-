@@ -1,4 +1,4 @@
-// Limestone's exact parameters (params.rs): names, defaults and ranges as in the author's repo.
+// Quartz's exact parameters (params.rs): names, defaults and ranges as in the author's repo.
 export type Curve = { enabled: boolean; points: { x: number; y: number }[] };
 
 export type LsParams = {
@@ -16,7 +16,7 @@ export type LsParams = {
   };
 };
 
-// Defaults exactly as Limestone's Default impls (params.rs).
+// Defaults exactly as Quartz's Default impls (params.rs).
 export const LS_DEFAULT: LsParams = {
   basic_exposure: { enabled: true, brightness: 0, contrast: 0, boost_blacks: 0, boost_whites: 0 },
   adaptive_exposure: { enabled: true, adaptive_exposure: 0, regions: 10, contrast: 0, brightness: 0, protect_highlights: 0, protect_shadows: 0 },

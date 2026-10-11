@@ -20,6 +20,6 @@ Source of truth for feature names: the Topaz Adjust 5 manual, as described in th
 | I/O | PNG, JPEG read/write | DONE for 8-bit PNG (CLI tested); JPEG not yet tested | 8-bit sRGB only. ICC and 16-bit are not handled. |
 | I/O | TIFF, 16-bit, ICC, EXIF orientation | NOT STARTED | |
 
-Note (2026-10-10): adaptive exposure, Details and noise suppression now use the guided filter (ported from the author's Limestone repo). Details tests now target texture. UI has Single, Split Wipe and Side-by-Side views and preset search, following the Limestone panel ideas in our own styling. Limestone's tone-mapping gamma, detail weight curves and spline curves are not ported.
+Note (2026-10-10): adaptive exposure, Details and noise suppression now use the guided filter (ported from the author's Quartz repo). Details tests now target texture. UI has Single, Split Wipe and Side-by-Side views and preset search, following the Quartz panel ideas in our own styling. Quartz's tone-mapping gamma, detail weight curves and spline curves are not ported.
 
-Note (2026-10-10, later): the Limestone stage set is in the engine and selectable. 21 factory presets are included under our own names, with the derivation risk recorded in D10.
+Note (2026-10-10, later): the Quartz stage set is in the engine and selectable. 21 factory presets are included under our own names, with the derivation risk recorded in D10.

@@ -41,7 +41,7 @@ The build is not finished. Done: engine modules (adaptive exposure, details, col
 ## Blocked
 
 - Photoshop Smart Filter proof (Gate 0): blocked on the Adobe C++ SDK download and on confirming the Photoshop 2026 build. See `PHOTOSHOP_INTEGRATION.md`.
-- Reference executable identity: static check only. Not run, not verified. See `REFERENCE_ANALYSIS.md`.
+- Reference executable identity: static check only. Not run, not verified.
 
 ## Next
 

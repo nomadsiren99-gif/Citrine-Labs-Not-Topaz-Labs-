@@ -79,7 +79,7 @@ fn basic_exposure_controls() {
 fn details_controls() {
     assert_neutral("details neutral", Look { details: Details::default(), ..Default::default() });
     // Sharpen is edge-gated by design: texture at the image's own noise level is left alone, so
-    // this uses a clear edge (see the note in QUALITY_FIX_REPORT.md).
+    // this uses a clear edge.
     let edge = {
         let (w, h) = (64usize, 4usize);
         let mut rgba = Vec::new();

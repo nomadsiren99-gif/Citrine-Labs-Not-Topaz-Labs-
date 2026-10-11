@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { NEUTRAL, SECTIONS, Sliders, hexToLinear, linearToHex } from "./controls";
-import { LS_DEFAULT, LS_SECTIONS, LsParams, getPath, setPath as setLsPath } from "./limestone";
+import { LS_DEFAULT, LS_SECTIONS, LsParams, getPath, setPath as setLsPath } from "./quartz";
 import { CurvePanel } from "./CurvePanel";
 import { HueWheel } from "./HueWheel";
 import fullLogo from "./assets/citrine-full-white.svg";
@@ -36,7 +36,7 @@ function computeHist(img: HTMLImageElement): Hist {
 }
 
 export default function App() {
-  const mode = "limestone" as const; // Limestone is the only engine in the UI
+  const mode = "quartz" as const; // Quartz is the only engine in the UI
   const [path, setPath] = useState("");
   const [outPath, setOutPath] = useState("");
   const [sliders, setSliders] = useState<Sliders>(NEUTRAL);
@@ -72,9 +72,9 @@ export default function App() {
     setLs(s.ls);
   };
 
-  // Load Limestone's exact factory presets from the backend.
+  // Load Quartz's exact factory presets from the backend.
   useEffect(() => {
-    invoke<LsPreset[]>("limestone_presets").then(setLsPresets).catch((e) => setStatus(String(e)));
+    invoke<LsPreset[]>("quartz_presets").then(setLsPresets).catch((e) => setStatus(String(e)));
   }, []);
 
   // Undo/redo over both models. Edits within 400 ms collapse into one step.
@@ -161,7 +161,7 @@ export default function App() {
     const show = (side: number) => {
       const id = ++previewReq.current;
       const t0 = performance.now();
-      return invoke<string>("render_limestone_preview", { path, params: shownLs, side })
+      return invoke<string>("render_quartz_preview", { path, params: shownLs, side })
         .then((b64) => {
           if (id !== previewReq.current) return;
           setPreview(`data:image/png;base64,${b64}`);
@@ -179,7 +179,7 @@ export default function App() {
   useEffect(() => {
     if (!path || view === "single") return;
     const id = window.setTimeout(() => {
-      const req = invoke<string>("render_limestone_preview", { path, params: LS_DEFAULT });
+      const req = invoke<string>("render_quartz_preview", { path, params: LS_DEFAULT });
       req.then((b64) => setBefore(`data:image/png;base64,${b64}`)).catch(() => setBefore(null));
     }, 150);
     return () => window.clearTimeout(id);
@@ -193,7 +193,7 @@ export default function App() {
     img.src = preview;
   }, [preview]);
 
-  const chooseLimestone = (p: LsPreset) => {
+  const chooseQuartz = (p: LsPreset) => {
     commit();
     setPreset(p.name);
     setLs(p.params);
@@ -275,7 +275,7 @@ export default function App() {
 
   const exportImage = () => {
     setStatus("Exporting...");
-    const req = invoke("export_limestone", { path, outPath, params: ls });
+    const req = invoke("export_quartz", { path, outPath, params: ls });
     req.then(() => setStatus(`Exported to ${outPath}`)).catch((e) => setStatus(String(e)));
   };
 
@@ -291,7 +291,7 @@ export default function App() {
   const saveProject = async () => {
     const picked = await save({ defaultPath: "session.photoproj.json", filters: [{ name: "Project", extensions: ["json"] }] });
     if (typeof picked !== "string") return;
-    const doc = { schemaVersion: PROJECT_SCHEMA, app: "photo-editor", mode, source: path, limestone: ls };
+    const doc = { schemaVersion: PROJECT_SCHEMA, app: "photo-editor", mode, source: path, quartz: ls };
     invoke("write_text_file", { path: picked, contents: JSON.stringify(doc, null, 2) })
       .then(() => setStatus(`Project saved to ${picked}`))
       .catch((e) => setStatus(String(e)));
@@ -307,7 +307,7 @@ export default function App() {
         return;
       }
       commit();
-      setLs({ ...LS_DEFAULT, ...doc.limestone });
+      setLs({ ...LS_DEFAULT, ...doc.quartz });
       if (typeof doc.source === "string" && doc.source) setPath(doc.source);
       setStatus(`Project loaded from ${picked}`);
     } catch (e) {
@@ -336,7 +336,7 @@ export default function App() {
           <div key={cat}>
             <h2>{cat}</h2>
             {list.map((p) => (
-              <button key={p.name} title={p.description} className={preset === p.name ? "sel" : ""} onClick={() => chooseLimestone(p)}>{p.name}</button>
+              <button key={p.name} title={p.description} className={preset === p.name ? "sel" : ""} onClick={() => chooseQuartz(p)}>{p.name}</button>
             ))}
           </div>
         ))}
@@ -418,7 +418,7 @@ export default function App() {
       </main>
 
       <aside className="right">
-        {mode === "limestone" ? (
+        {mode === "quartz" ? (
           <>
             {LS_SECTIONS.map((sec) => {
               const isOpen = !!openSec[sec.id];

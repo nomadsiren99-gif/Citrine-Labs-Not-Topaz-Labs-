@@ -1,4 +1,4 @@
-// Presets: the Limestone factory set, renamed for this app. Values are already converted to
+// Presets: the Quartz factory set, renamed for this app. Values are already converted to
 // this app's slider convention (see controls.ts). Our own names; no Topaz names are used.
 import type { Sliders } from "./controls";
 

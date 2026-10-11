@@ -47,7 +47,7 @@ pub struct Plan {
 
 impl Plan {
     /// Measures the whole-image values for `look` on `src`. Looks the tiled path does not cover
-    /// (strokes, Limestone style, independent details) get a plan that renders full-frame.
+    /// (strokes, Quartz style, independent details) get a plan that renders full-frame.
     pub fn new(src: &LinearImage, look: &Look, tile: usize) -> Result<Self, EngineError> {
         let (w, h) = (src.width(), src.height());
         let full = (w, h);

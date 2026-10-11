@@ -60,7 +60,7 @@ impl Details {
             .chunks_exact(4)
             .map(|p| luma(p).max(LUMA_EPS).log2())
             .collect();
-        // Guided base (as in the author's Limestone detail stage): edges stay out of the residue.
+        // Guided base (as in the author's Quartz detail stage): edges stay out of the residue.
         let base = crate::guided::guided_filter_auto(&log_luma, &log_luma, img.width(), img.height(), radius, 2e-2);
         Ok(log_luma.iter().zip(base).map(|(l, b)| l - b).collect())
     }

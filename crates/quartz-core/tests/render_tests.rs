@@ -156,7 +156,7 @@ fn test_partial_preset_json_uses_defaults() {
 
 #[test]
 fn test_save_keeps_16_bit_and_alpha() {
-    let dir = std::env::temp_dir().join(format!("limestone_test_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("quartz_test_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
 
     let mut img = RgbImageF32::new(4, 4);

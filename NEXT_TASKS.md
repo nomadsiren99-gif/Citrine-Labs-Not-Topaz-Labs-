@@ -3,7 +3,7 @@
 Ordered. Stop at the first item that is blocked and report it.
 
 0. Done (v1 look): `render-cli` chains exposure, adaptive, details, colour (see IMAGE_ENGINE_VALIDATION.md). Local adjustments, finishing modules and a UI are still to do.
-0a. **Blocked on a decision:** Limestone (github.com/anuzdhk/Limestone) reviewed, not imported. No LICENSE file (GitHub shows none, README badge says MIT). Its presets name and copy Topaz Adjust 4 looks, which the spec forbids. It commits two prebuilt Windows .exe files of unknown origin, and the README clone URL points at another repo. Options: (a) owner confirms a licence and we use it with attribution, minus the Topaz presets; (b) reference only, reimplement ideas (its Process Details Independently and region mapping are useful); (c) skip. Recommended: (b).
+0a. **Blocked on a decision:** Quartz (github.com/anuzdhk/Quartz) reviewed, not imported. No LICENSE file (GitHub shows none, README badge says MIT). Its presets name and copy Topaz Adjust 4 looks, which the spec forbids. It commits two prebuilt Windows .exe files of unknown origin, and the README clone URL points at another repo. Options: (a) owner confirms a licence and we use it with attribution, minus the Topaz presets; (b) reference only, reimplement ideas (its Process Details Independently and region mapping are useful); (c) skip. Recommended: (b).
 
 1. Done: Rust installed, `cargo test --workspace` passes 9/9, CLI exposure check recorded.
 2. Test JPEG input/output through the CLI, then decide whether ICC and 16-bit input belong in M1 or later.
@@ -25,6 +25,6 @@ Ordered. Stop at the first item that is blocked and report it.
 
 - Done: project save and open (versioned JSON, schemaVersion 1). Next: a tested migration path for future schema versions, and tile-based rendering.
 
-- Done: exact Limestone port (D12), Limestone mode in the app with exact ranges, presets, a points-based curve editor and an RGB and luminance histogram with channel toggles.
+- Done: exact Quartz port (D12), Quartz mode in the app with exact ranges, presets, a points-based curve editor and an RGB and luminance histogram with channel toggles.
 - Open: Ours mode still uses the three-slider curve. Undo covers both modes. Snapshots are not in the new UI yet.
 - Open: check the exact pipeline in the window (not yet tested by hand); check the curve interaction against Lightroom/Photoshop feel.

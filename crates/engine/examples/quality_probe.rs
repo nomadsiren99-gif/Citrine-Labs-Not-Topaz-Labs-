@@ -6,7 +6,7 @@
 
 use std::{env, fs, path::Path};
 
-use engine::limestone_exact::{image_buffer::RgbImageF32, params::AdjustParams, pipeline::process_image};
+use engine::quartz_exact::{image_buffer::RgbImageF32, params::AdjustParams, pipeline::process_image};
 use engine::{apply_look, details::Details, AdaptiveExposure, LinearImage, Look};
 use image::{imageops::FilterType, RgbImage};
 
@@ -123,7 +123,7 @@ fn render_ours(rgb: &[u8], w: usize, h: usize, look: &Look) -> Vec<u8> {
     img.to_srgb8().chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect()
 }
 
-/// Limestone path: the exact port the desktop UI uses by default.
+/// Quartz path: the exact port the desktop UI uses by default.
 fn render_ls(rgb: &[u8], w: usize, h: usize, p: &AdjustParams) -> Vec<u8> {
     let img = RgbImage::from_raw(w as u32, h as u32, rgb.to_vec()).unwrap();
     process_image(&RgbImageF32::from_rgb8(&img), p).to_rgb8().into_raw()
@@ -270,7 +270,7 @@ fn run(out_dir: &Path, label: &str, w: usize, h: usize) {
 
     println!("\n## {label} ({w}x{h})");
 
-    // ---- Limestone path (what the desktop UI shows by default) ----
+    // ---- Quartz path (what the desktop UI shows by default) ----
     let mut p = AdjustParams::default();
     ls_adapt(&mut p);
     let ls_a = |s: &str| render_ls(&inputs[s], w, h, &p);
@@ -278,7 +278,7 @@ fn run(out_dir: &Path, label: &str, w: usize, h: usize) {
     save("ls_adaptive_backlit.png", &back, w, h);
     let ramp = ls_a("ramp");
     save("ls_adaptive_ramp.png", &ramp, w, h);
-    println!("Limestone path, adaptive exposure = 1.0, regions = 10");
+    println!("Quartz path, adaptive exposure = 1.0, regions = 10");
     let tree_x = (0.31 * w as f32) as usize;
     let row = (0.30 * h as f32) as usize;
     print_row("halo, sky side of tree edge (code values)", format!("{:.2}", halo(&inputs["backlit"], &back, w, row, tree_x, true) * 1.0));

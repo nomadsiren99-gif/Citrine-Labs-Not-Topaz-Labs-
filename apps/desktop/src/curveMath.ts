@@ -1,4 +1,4 @@
-// Limestone curve maths, ported from its generate_curve_lut (stages/curve.rs): piecewise cubic
+// Quartz curve maths, ported from its generate_curve_lut (stages/curve.rs): piecewise cubic
 // Hermite with Catmull-Rom tangents, clamped to 0..1, sampled on a 1024-entry LUT.
 export type Pt = { x: number; y: number };
 

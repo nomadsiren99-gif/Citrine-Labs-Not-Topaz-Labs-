@@ -1,7 +1,7 @@
-//! Renders the Limestone factory presets whose names contain "Pop" on one image, and prints the
-//! skin colour of the face. Usage: limestone_pop_check <image> <out_dir>
+//! Renders the Quartz factory presets whose names contain "Pop" on one image, and prints the
+//! skin colour of the face. Usage: quartz_pop_check <image> <out_dir>
 
-use engine::limestone_exact::{get_factory_presets, image_buffer::RgbImageF32, pipeline::process_image};
+use engine::quartz_exact::{get_factory_presets, image_buffer::RgbImageF32, pipeline::process_image};
 use image::RgbImage;
 use std::path::Path;
 

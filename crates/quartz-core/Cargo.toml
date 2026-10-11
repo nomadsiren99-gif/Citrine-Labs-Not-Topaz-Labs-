@@ -3,7 +3,7 @@ name = "adjust-core"
 version = "0.3.0"
 edition = "2021"
 authors = ["Androp Contributors"]
-description = "Core DSP and image processing engine for LimeStone"
+description = "Core DSP and image processing engine for Quartz"
 
 [dependencies]
 rayon = "1"

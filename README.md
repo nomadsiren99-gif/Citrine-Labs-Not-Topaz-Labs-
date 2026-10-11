@@ -6,8 +6,8 @@ in linear light, with a Tauri 2 + React interface on top.
 
 > **Disclaimer.** This project is **not** affiliated with, endorsed by, or derived
 > from Topaz Labs or its product Topaz Adjust AI. It is an independent
-> implementation. The "Limestone" model and presets are ported from the author's
-> own Limestone repository (see [Licensing and provenance](#licensing-and-provenance)).
+> implementation. The "Quartz" model and presets are ported from the author's
+> own Quartz repository (see [Licensing and provenance](#licensing-and-provenance)).
 
 ## Repository layout
 
@@ -17,7 +17,7 @@ crates/
   engine/                  CPU reference engine: exposure, adaptive exposure,
                            details, colour, noise, curve, local strokes,
                            finishing, pipeline with Look presets, Rayon parallelism
-  limestone-core/          "adjust-core" crate: the Limestone model, copied from
+  quartz-core/          "adjust-core" crate: the Quartz model, copied from
                            the author's repository with its parameters, presets
                            and pixel handling unchanged
   ffi/                     engine-ffi: C ABI (staticlib + cdylib) and a C harness
@@ -78,7 +78,7 @@ cargo run -p render-cli -- <in.png> <out.png> --ev 0.5
 Two models are available in the app:
 
 - **Ours**: the engine in `crates/engine`, with its own sliders and presets.
-- **Limestone**: the exact port in `crates/limestone-core`, with its own ranges
+- **Quartz**: the exact port in `crates/quartz-core`, with its own ranges
   and factory presets.
 
 ## Status
@@ -103,7 +103,7 @@ Not yet verified: golden-image tests against fixture photos, ICC handling,
 - **Not Topaz Labs.** No code, model or asset is taken from Topaz Labs or Topaz
   Adjust AI. The reference folder used during the project is kept separate and
   its executable was never run (D1, D5).
-- **Limestone presets.** The Limestone presets are described by their author as
+- **Quartz presets.** The Quartz presets are described by their author as
   reverse-engineered from Topaz Adjust 4 looks. They are kept because the author
   asked for them, but this is a licensing risk. Decide whether they can be used
   before any public release (D10, D12).

@@ -1,5 +1,5 @@
 //! Guided filter (He, Sun, Tang 2010), edge-preserving. Ported from the author's own
-//! Limestone repo (`crates/adjust-core/src/filter.rs`), adapted to this engine's `box_blur`.
+//! Quartz repo (`crates/adjust-core/src/filter.rs`), adapted to this engine's `box_blur`.
 //! Parameters: `guidance` steers the edges, `src` is smoothed, `radius` is the window, `eps`
 //! sets how strongly flat-vs-edge is decided.
 

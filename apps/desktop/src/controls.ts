@@ -2,7 +2,7 @@
 export type Dab = { kind: number; x: number; y: number; radius: number; hardness: number; opacity: number; strength: number };
 
 export type Sliders = {
-  limestone: boolean;
+  quartz: boolean;
   brush: Dab[];
   ev: number; basicContrast: number; boostBlacks: number; boostWhites: number;
   adaptive: number; adaptiveContrast: number; adaptiveRegions: number; adaptiveBrightness: number;
@@ -22,7 +22,7 @@ export type Sliders = {
 };
 
 export const NEUTRAL: Sliders = {
-  limestone: false,
+  quartz: false,
   brush: [],
   ev: 0, basicContrast: 0, boostBlacks: 0, boostWhites: 0,
   adaptive: 0, adaptiveContrast: 0, adaptiveRegions: 4, adaptiveBrightness: 0, protectHighlights: 0, protectShadows: 0,

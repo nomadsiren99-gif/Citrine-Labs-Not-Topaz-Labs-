@@ -24,18 +24,18 @@ Box-blur local mean of log2 luminance with clamp-to-edge borders, radius = longe
 ## D7 — Documentation files at project root (2026-10-10)
 The brief lists eight continuity files. They sit at the root of `photo-editor/`, not in `docs/` as the spec's tree suggests.
 
-## D9 — Guided base from the author's Limestone (2026-10-10)
-The guided filter (He et al. 2010), ported from the author's Limestone repo, now sets the base in adaptive exposure (edge-aware local mean), Details (base so that edges stay out of the detail residue, eps 0.02 in log2 units) and noise suppression (eps 0.03). Consequence: Details now targets fine texture, not step edges, so the Details tests were rewritten around texture. Reason: halo reduction and the author's own design. Other Limestone stages (gamma tone mapping, smoothing and sharpening weight curves, spline curves, colour and finishing) are not ported yet.
+## D9 — Guided base from the author's Quartz (2026-10-10)
+The guided filter (He et al. 2010), ported from the author's Quartz repo, now sets the base in adaptive exposure (edge-aware local mean), Details (base so that edges stay out of the detail residue, eps 0.02 in log2 units) and noise suppression (eps 0.03). Consequence: Details now targets fine texture, not step edges, so the Details tests were rewritten around texture. Reason: halo reduction and the author's own design. Other Quartz stages (gamma tone mapping, smoothing and sharpening weight curves, spline curves, colour and finishing) are not ported yet.
 
-## D10 — Limestone stage set and factory presets (2026-10-10)
-All of Limestone's stages are ported into `crates/engine/src/limestone.rs` and selected with `Style::Limestone` (the Model switch in the UI). The default engine is unchanged. The 21 Limestone factory presets are kept, renamed to our own names (for example "Spicify" becomes "Vivid Punch"), and "Topaz" is removed from their descriptions. The values are converted to our slider convention in `apps/desktop/src/presets.ts`. Presets switch the model on.
+## D10 — Quartz stage set and factory presets (2026-10-10)
+All of Quartz's stages are ported into `crates/engine/src/quartz.rs` and selected with `Style::Quartz` (the Model switch in the UI). The default engine is unchanged. The 21 Quartz factory presets are kept, renamed to our own names (for example "Spicify" becomes "Vivid Punch"), and "Topaz" is removed from their descriptions. The values are converted to our slider convention in `apps/desktop/src/presets.ts`. Presets switch the model on.
 
-Risk to note: Limestone describes its presets as reverse-engineered from Topaz Adjust 4. Renaming them does not remove that origin. Before any public release, decide whether these values can be used.
+Risk to note: Quartz describes its presets as reverse-engineered from Topaz Adjust 4. Renaming them does not remove that origin. Before any public release, decide whether these values can be used.
 
 ## D11 — CPU parallelism and measured baseline (2026-10-10)
 Rayon is used for the per-pixel loops, the box blur (rows and columns in parallel), the colour stage and exposure. sRGB decode uses an exact 256-entry table. Reason: the look pipeline took 2.0 s of 2.3 s on the 8.8 MP test image, single-threaded. Result: 1.58 s total. Tile rendering and GPU are not done.
 
-## D12 — Exact Limestone port (2026-10-11)
-The author's Limestone `adjust-core` crate is copied into `crates/engine/src/limestone_exact/` with only its `crate::` paths rewritten. Its parameters, defaults, presets (names as in the repo, Topaz-derived ones included, as the author asked), pipeline order and pixel handling are used unchanged. Pixels are read as value/255 with no sRGB decode, and written back as value*255+0.5, as in the source. The desktop app has a Limestone mode with its exact ranges and presets. Our own engine stays available as the Ours mode.
+## D12 — Exact Quartz port (2026-10-11)
+The author's Quartz `adjust-core` crate is copied into `crates/engine/src/quartz_exact/` with only its `crate::` paths rewritten. Its parameters, defaults, presets (names as in the repo, Topaz-derived ones included, as the author asked), pipeline order and pixel handling are used unchanged. Pixels are read as value/255 with no sRGB decode, and written back as value*255+0.5, as in the source. The desktop app has a Quartz mode with its exact ranges and presets. Our own engine stays available as the Ours mode.
 
-Risk: the Limestone presets are derived from Topaz Adjust 4 looks (see D10). The author has asked to keep them.
+Risk: the Quartz presets are derived from Topaz Adjust 4 looks (see D10). The author has asked to keep them.

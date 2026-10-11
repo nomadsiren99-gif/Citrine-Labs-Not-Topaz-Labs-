@@ -1,7 +1,7 @@
-//! The author's Limestone stages, ported into this engine. Selected with `Style::Limestone`
+//! The author's Quartz stages, ported into this engine. Selected with `Style::Quartz`
 //! on the `Look`, so the original engine stays available as the default.
 //! Source: the author's own repo (`crates/adjust-core/src/stages/*.rs`, `color.rs`, `curve.rs`).
-//! Shortcut: Limestone's formulas assume values in 0..1, so this path clamps to 0..1, while
+//! Shortcut: Quartz's formulas assume values in 0..1, so this path clamps to 0..1, while
 //! the default path keeps linear values above 1. Parameters are mapped from our sliders as
 //! documented on each function.
 
@@ -12,7 +12,7 @@ use crate::pipeline::Look;
 
 const LUMA_FLOOR: f32 = 0.0001;
 
-/// Runs every Limestone stage in the author's order, then the strokes and transparency
+/// Runs every Quartz stage in the author's order, then the strokes and transparency
 /// from our look. `original` is the image before the look, for transparency.
 pub fn apply(img: &mut LinearImage, original: &LinearImage, look: &Look) -> Result<(), EngineError> {
     basic(img, look.basic.contrast, look.basic.boost_blacks, look.basic.boost_whites);
@@ -376,11 +376,11 @@ mod tests {
     }
 
     fn ls() -> Look {
-        Look { style: Style::Limestone, ..Default::default() }
+        Look { style: Style::Quartz, ..Default::default() }
     }
 
     #[test]
-    fn neutral_limestone_look_is_bit_identical() {
+    fn neutral_quartz_look_is_bit_identical() {
         let original = sample();
         let mut img = sample();
         apply_look(&mut img, &ls()).unwrap();

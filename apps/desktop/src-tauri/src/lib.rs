@@ -10,7 +10,7 @@ use engine::details::Details;
 use engine::finishing::Finishing;
 use engine::local::{Stroke, StrokeKind};
 use engine::noise::Denoise;
-use engine::limestone_exact::{
+use engine::quartz_exact::{
     image_buffer::RgbImageF32, params::AdjustParams, pipeline::process_image, preset::get_factory_presets, preset::Preset,
 };
 use engine::{apply_look, BasicExposure, LinearImage, Look, Style};
@@ -104,8 +104,8 @@ pub struct Sliders {
     pub border_size: f32,
     pub border_color: [f32; 3],
     pub transparency: f32,
-    // Use the Limestone stage set instead of the default engine
-    pub limestone: bool,
+    // Use the Quartz stage set instead of the default engine
+    pub quartz: bool,
     // Paint-tool dabs, applied in order after the single stroke above
     pub brush: Vec<Dab>,
     // One local brush stroke
@@ -134,7 +134,7 @@ impl Default for Sliders {
             warmth: 0.0, tone_colors: [[1.0; 3]; 4], tone_strength: 0.0, diffusion: 0.0,
             vignette: 0.0, vignette_size: 0.5, vignette_transition: 0.5, vignette_center_x: 0.5, vignette_center_y: 0.5,
             grain: 0.0, grain_size: 1.0, grain_seed: 1, border_size: 0.0, border_color: [0.0; 3], transparency: 0.0,
-            limestone: false,
+            quartz: false,
             brush: Vec::new(),
             stroke_enabled: false, stroke_kind: 0, stroke_x: 0.5, stroke_y: 0.5, stroke_radius: 0.2,
             stroke_hardness: 0.5, stroke_opacity: 1.0, stroke_strength: 1.0,
@@ -147,7 +147,7 @@ impl Sliders {
         let curve_default = (self.curve_shadows, self.curve_mids, self.curve_highlights) == (0.0, 0.5, 1.0);
         let stroke_kind = kind_of(self.stroke_kind);
         Look {
-            style: if self.limestone { Style::Limestone } else { Style::Ours },
+            style: if self.quartz { Style::Quartz } else { Style::Ours },
             ev: self.ev,
             basic: BasicExposure { contrast: self.basic_contrast, boost_blacks: self.boost_blacks, boost_whites: self.boost_whites },
             adaptive: AdaptiveExposure {
@@ -320,14 +320,14 @@ fn export_image(path: String, out_path: String, sliders: Sliders) -> Result<(), 
     out.save(&out_path).map_err(|e| format!("cannot write image: {e}"))
 }
 
-/// Limestone's exact factory presets (names and parameters as in the author's repo).
+/// Quartz's exact factory presets (names and parameters as in the author's repo).
 #[tauri::command]
-fn limestone_presets() -> Vec<Preset> {
+fn quartz_presets() -> Vec<Preset> {
     get_factory_presets()
 }
 
-/// Runs Limestone's exact pipeline on RGB. Alpha is kept from the source image.
-fn limestone_render(src: &RgbaImage, params: &AdjustParams) -> RgbaImage {
+/// Runs Quartz's exact pipeline on RGB. Alpha is kept from the source image.
+fn quartz_render(src: &RgbaImage, params: &AdjustParams) -> RgbaImage {
     let rgb = image::DynamicImage::ImageRgba8(src.clone()).to_rgb8();
     let input = RgbImageF32::from_rgb8(&rgb);
     let out = process_image(&input, params).to_rgb8();
@@ -366,22 +366,22 @@ fn preview_source(path: &str, side: u32) -> Result<RgbaImage, String> {
     Ok(image::imageops::resize(src, w, h, FilterType::Triangle))
 }
 
-/// Exact Limestone preview. `side` is the longest side in pixels: a small draft while a slider moves,
+/// Exact Quartz preview. `side` is the longest side in pixels: a small draft while a slider moves,
 /// the full preview size once it settles. Defaults to PREVIEW_MAX_SIDE.
 #[tauri::command]
-fn render_limestone_preview(path: String, params: AdjustParams, side: Option<u32>) -> Result<String, String> {
+fn render_quartz_preview(path: String, params: AdjustParams, side: Option<u32>) -> Result<String, String> {
     let small = preview_source(&path, side.unwrap_or(PREVIEW_MAX_SIDE))?;
-    let out = limestone_render(&small, &params);
+    let out = quartz_render(&small, &params);
     let mut buf = Cursor::new(Vec::new());
     DynamicImage::ImageRgba8(out).write_to(&mut buf, ImageFormat::Png).map_err(|e| e.to_string())?;
     Ok(STANDARD.encode(buf.into_inner()))
 }
 
-/// Exact Limestone export at full resolution.
+/// Exact Quartz export at full resolution.
 #[tauri::command]
-fn export_limestone(path: String, out_path: String, params: AdjustParams) -> Result<(), String> {
+fn export_quartz(path: String, out_path: String, params: AdjustParams) -> Result<(), String> {
     let full = load(&path)?;
-    limestone_render(&full, &params).save(&out_path).map_err(|e| format!("cannot write image: {e}"))
+    quartz_render(&full, &params).save(&out_path).map_err(|e| format!("cannot write image: {e}"))
 }
 
 /// Writes a preset (JSON text) to a path the user chose in the save dialog.
@@ -403,7 +403,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             render_preview, export_image, write_text_file, read_text_file, image_size, render_crop,
-            limestone_presets, render_limestone_preview, export_limestone
+            quartz_presets, render_quartz_preview, export_quartz
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -468,19 +468,19 @@ mod tests {
     }
 
     #[test]
-    fn limestone_neutral_is_identical() {
+    fn quartz_neutral_is_identical() {
         let src = RgbaImage::from_fn(40, 20, |x, y| image::Rgba([(x * 6) as u8, (y * 12) as u8, 90, 200]));
-        let out = limestone_render(&src, &AdjustParams::default());
-        assert_eq!(out, src, "neutral Limestone render must not change pixels or alpha");
+        let out = quartz_render(&src, &AdjustParams::default());
+        assert_eq!(out, src, "neutral Quartz render must not change pixels or alpha");
     }
 
     #[test]
-    fn every_limestone_factory_preset_renders() {
+    fn every_quartz_factory_preset_renders() {
         let src = RgbaImage::from_fn(64, 48, |x, y| image::Rgba([(x * 3) as u8, (y * 5) as u8, 120, 255]));
-        let presets = limestone_presets();
+        let presets = quartz_presets();
         assert_eq!(presets.len(), 157);
         for p in presets {
-            let out = limestone_render(&src, &p.params);
+            let out = quartz_render(&src, &p.params);
             assert_eq!(out.dimensions(), (64, 48), "preset {}", p.name);
             assert!(out.pixels().all(|px| px.0[3] == 255), "alpha changed in {}", p.name);
         }

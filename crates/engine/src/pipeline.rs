@@ -63,12 +63,12 @@ mod tests {
     }
 }
 
-/// Which stage set runs. `Ours` is the default engine. `Limestone` is the author's ported set.
+/// Which stage set runs. `Ours` is the default engine. `Quartz` is the author's ported set.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Style {
     #[default]
     Ours,
-    Limestone,
+    Quartz,
 }
 
 /// Every control in one place, neutral by default. Order follows the spec: exposure, adaptive
@@ -92,9 +92,9 @@ pub struct Look {
 /// look, so Brush Out and Transparency return toward the input.
 pub fn apply_look(img: &mut LinearImage, look: &Look) -> Result<(), EngineError> {
     let original = img.clone();
-    if look.style == Style::Limestone {
+    if look.style == Style::Quartz {
         apply_exposure(img, look.ev)?;
-        return crate::limestone::apply(img, &original, look);
+        return crate::quartz::apply(img, &original, look);
     }
     apply_exposure(img, look.ev)?;
     look.basic.apply(img)?;
