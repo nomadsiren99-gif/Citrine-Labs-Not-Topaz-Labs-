@@ -1,5 +1,7 @@
 pub mod adaptive_exposure;
+pub mod basic_correction;
 pub mod basic_exposure;
+pub mod grading;
 pub mod color_adjust;
 pub mod curve;
 pub mod denoise;

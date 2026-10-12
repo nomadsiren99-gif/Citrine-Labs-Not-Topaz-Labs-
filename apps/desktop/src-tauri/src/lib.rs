@@ -18,6 +18,8 @@ use image::{imageops::FilterType, DynamicImage, ImageFormat, RgbaImage};
 use serde::Deserialize;
 
 /// Preview longest side in pixels. Proposed, from the spec's 960 px proxy.
+/// Longest side of a preset thumbnail in the library.
+const PRESET_THUMB_SIDE: u32 = 160;
 const PREVIEW_MAX_SIDE: u32 = 960;
 
 /// One brush dab from the paint tool. Coordinates are fractions of the image.
@@ -269,9 +271,16 @@ fn render(src: &RgbaImage, look: &Look) -> Result<RgbaImage, String> {
     RgbaImage::from_raw(w, h, img.to_srgb8()).ok_or_else(|| "output buffer size mismatch".to_string())
 }
 
+/// Runs heavy image work on a blocking thread. Plain Tauri commands run on the main thread, and a
+/// full-resolution render there freezes the window.
+async fn off_thread<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
+}
+
 /// Renders a downscaled preview and returns it as a base64 PNG.
 #[tauri::command]
-fn render_preview(path: String, sliders: Sliders) -> Result<String, String> {
+async fn render_preview(path: String, sliders: Sliders) -> Result<String, String> {
+    off_thread(move || -> Result<_, String> {
     let full = load(&path)?;
     let scale = (PREVIEW_MAX_SIDE as f32 / full.width().max(full.height()) as f32).min(1.0);
     let small = if scale < 1.0 {
@@ -284,6 +293,7 @@ fn render_preview(path: String, sliders: Sliders) -> Result<String, String> {
     let mut buf = Cursor::new(Vec::new());
     DynamicImage::ImageRgba8(out).write_to(&mut buf, ImageFormat::Png).map_err(|e| e.to_string())?;
     Ok(STANDARD.encode(buf.into_inner()))
+    }).await
 }
 
 /// Renders at full resolution and writes the file. Format comes from the output extension.
@@ -300,14 +310,17 @@ static ZOOM: std::sync::Mutex<Option<ZoomCache>> = std::sync::Mutex::new(None);
 
 /// Width and height of the image at `path`, in pixels.
 #[tauri::command]
-fn image_size(path: String) -> Result<(u32, u32), String> {
+async fn image_size(path: String) -> Result<(u32, u32), String> {
+    off_thread(move || -> Result<_, String> {
     let img = load(&path)?;
     Ok((img.width(), img.height()))
+    }).await
 }
 
 /// Renders the rectangle `(x, y, w, h)` of the image at full resolution, as a base64 PNG.
 #[tauri::command]
-fn render_crop(path: String, sliders: Sliders, x: u32, y: u32, w: u32, h: u32) -> Result<String, String> {
+async fn render_crop(path: String, sliders: Sliders, x: u32, y: u32, w: u32, h: u32) -> Result<String, String> {
+    off_thread(move || -> Result<_, String> {
     let look = sliders.look();
     let look_key = format!("{look:?}");
     let mut cache = ZOOM.lock().map_err(|e| e.to_string())?;
@@ -333,13 +346,16 @@ fn render_crop(path: String, sliders: Sliders, x: u32, y: u32, w: u32, h: u32) -
     let mut buf = Cursor::new(Vec::new());
     DynamicImage::ImageRgba8(rgba).write_to(&mut buf, ImageFormat::Png).map_err(|e| e.to_string())?;
     Ok(STANDARD.encode(buf.into_inner()))
+    }).await
 }
 
 #[tauri::command]
-fn export_image(path: String, out_path: String, sliders: Sliders) -> Result<(), String> {
+async fn export_image(path: String, out_path: String, sliders: Sliders) -> Result<(), String> {
+    off_thread(move || -> Result<_, String> {
     let full = load(&path)?;
     let out = render(&full, &sliders.look())?;
     out.save(&out_path).map_err(|e| format!("cannot write image: {e}"))
+    }).await
 }
 
 /// Quartz's exact factory presets (names and parameters as in the author's repo).
@@ -391,50 +407,154 @@ fn preview_source(path: &str, side: u32) -> Result<RgbaImage, String> {
 /// Exact Quartz preview. `side` is the longest side in pixels: a small draft while a slider moves,
 /// the full preview size once it settles. Defaults to PREVIEW_MAX_SIDE.
 #[tauri::command]
-fn render_quartz_preview(path: String, params: AdjustParams, side: Option<u32>) -> Result<String, String> {
+async fn render_quartz_preview(path: String, params: AdjustParams, side: Option<u32>) -> Result<String, String> {
+    off_thread(move || -> Result<_, String> {
     let small = preview_source(&path, side.unwrap_or(PREVIEW_MAX_SIDE))?;
     let out = quartz_render(&small, &params);
     let mut buf = Cursor::new(Vec::new());
     DynamicImage::ImageRgba8(out).write_to(&mut buf, ImageFormat::Png).map_err(|e| e.to_string())?;
     Ok(STANDARD.encode(buf.into_inner()))
+    }).await
 }
 
-/// Full-resolution Quartz output for the zoom views, kept for the last image and settings. Panning
-/// crops from it, so only a settings change renders the whole picture again.
+/// Full-resolution crop kept for the zoom views, for the last image and settings key.
 static ZOOM_QUARTZ: std::sync::Mutex<Option<(String, String, RgbaImage)>> = std::sync::Mutex::new(None);
 
-/// Full-resolution Quartz crop `(x, y, w, h)` for the zoom views, as a base64 PNG.
-#[tauri::command]
-fn render_quartz_crop(path: String, params: AdjustParams, x: u32, y: u32, w: u32, h: u32) -> Result<String, String> {
-    let key = serde_json::to_string(&params).map_err(|e| e.to_string())?;
-    let mut cache = ZOOM_QUARTZ.lock().map_err(|e| e.to_string())?;
-    let fresh = cache.as_ref().map(|(p, k, _)| p != &path || k != &key).unwrap_or(true);
+/// Full-resolution spatial base (colour, tone and curve left to the GPU), kept per image and spatial key.
+static ZOOM_BASE: std::sync::Mutex<Option<(String, String, RgbaImage)>> = std::sync::Mutex::new(None);
+
+/// Raw RGBA behind a width and height header (u32, little-endian): no PNG encode or decode.
+fn raw_response(img: &RgbaImage) -> tauri::ipc::Response {
+    let mut bytes = Vec::with_capacity(8 + img.as_raw().len());
+    bytes.extend_from_slice(&img.width().to_le_bytes());
+    bytes.extend_from_slice(&img.height().to_le_bytes());
+    bytes.extend_from_slice(img.as_raw());
+    tauri::ipc::Response::new(bytes)
+}
+
+/// Crops `(x, y, w, h)` from the full-resolution render of `render` (rendered once per `key`), as raw RGBA.
+fn crop_cached(
+    cache: &std::sync::Mutex<Option<(String, String, RgbaImage)>>,
+    path: &str,
+    key: &AdjustParams,
+    render: &AdjustParams,
+    (x, y, w, h): (u32, u32, u32, u32),
+) -> Result<tauri::ipc::Response, String> {
+    let key_json = serde_json::to_string(key).map_err(|e| e.to_string())?;
+    let mut cache = cache.lock().map_err(|e| e.to_string())?;
+    let fresh = cache.as_ref().map(|(p, k, _)| p != path || *k != key_json).unwrap_or(true);
     if fresh {
-        let full = load(&path)?;
-        *cache = Some((path.clone(), key, quartz_render(&full, &params)));
+        let full = load(path)?;
+        *cache = Some((path.to_string(), key_json, quartz_render(&full, render)));
     }
     let (_, _, out) = cache.as_ref().expect("cache filled above");
     let x = x.min(out.width().saturating_sub(1));
     let y = y.min(out.height().saturating_sub(1));
     let w = w.min(out.width() - x).max(1);
     let h = h.min(out.height() - y).max(1);
-    let crop = image::imageops::crop_imm(out, x, y, w, h).to_image();
-    let mut buf = Cursor::new(Vec::new());
-    DynamicImage::ImageRgba8(crop).write_to(&mut buf, ImageFormat::Png).map_err(|e| e.to_string())?;
-    Ok(STANDARD.encode(buf.into_inner()))
+    Ok(raw_response(&image::imageops::crop_imm(out, x, y, w, h).to_image()))
+}
+
+/// Full-resolution Quartz crop `(x, y, w, h)` for the zoom views, as raw RGBA.
+#[tauri::command]
+async fn render_quartz_crop(path: String, params: AdjustParams, x: u32, y: u32, w: u32, h: u32) -> Result<tauri::ipc::Response, String> {
+    off_thread(move || -> Result<_, String> {
+    crop_cached(&ZOOM_QUARTZ, &path, &params, &params, (x, y, w, h))
+    }).await
+}
+
+/// Parameters with the per-pixel stages off (colour, tone, curve, finishing). The GPU applies those, so
+/// the CPU renders only the stages that depend on the rest of the image.
+fn spatial_only(params: &AdjustParams) -> AdjustParams {
+    let mut p = params.clone();
+    p.color.enabled = false;
+    p.tone.enabled = false;
+    p.curve.enabled = false;
+    p.finishing.enabled = false;
+    p.basic_correction.enabled = false;
+    p.grading.enabled = false;
+    p
+}
+
+/// Spatial base for the GPU preview at preview size, as raw RGBA.
+#[tauri::command]
+async fn render_base_preview(path: String, params: AdjustParams, side: Option<u32>) -> Result<tauri::ipc::Response, String> {
+    off_thread(move || -> Result<_, String> {
+    let small = preview_source(&path, side.unwrap_or(PREVIEW_MAX_SIDE))?;
+    Ok(raw_response(&quartz_render(&small, &spatial_only(&params))))
+    }).await
+}
+
+/// Full-resolution spatial base crop for the GPU zoom view, as raw RGBA.
+#[tauri::command]
+async fn render_base_crop(path: String, params: AdjustParams, x: u32, y: u32, w: u32, h: u32) -> Result<tauri::ipc::Response, String> {
+    off_thread(move || -> Result<_, String> {
+    let base = spatial_only(&params);
+    crop_cached(&ZOOM_BASE, &path, &base, &base, (x, y, w, h))
+    }).await
+}
+
+/// Red, green and blue curve tables (1024 entries each), composed as Quartz's `apply_curve` does,
+/// as f32 little-endian. Sampled on the GPU with the same index rule.
+#[tauri::command]
+async fn curve_luts(params: AdjustParams) -> Result<tauri::ipc::Response, String> {
+    off_thread(move || -> Result<_, String> {
+    use engine::quartz_exact::stages::curve::generate_curve_lut;
+    let c = &params.curve;
+    let active = |pts: &[engine::quartz_exact::params::CurvePoint]| pts.len() >= 2;
+    let master = generate_curve_lut(&c.points);
+    let sample = |lut: &[f32; 1024], v: f32| lut[((v.clamp(0.0, 1.0) * 1023.0).round() as usize).min(1023)];
+    let compose = |channel: &[engine::quartz_exact::params::CurvePoint]| -> [f32; 1024] {
+        if !active(channel) {
+            return master;
+        }
+        let ch = generate_curve_lut(channel);
+        let mut out = [0.0f32; 1024];
+        for (o, &m) in out.iter_mut().zip(master.iter()) {
+            *o = sample(&ch, m);
+        }
+        out
+    };
+    let mut bytes = Vec::with_capacity(3 * 1024 * 4);
+    for lut in [compose(&c.red), compose(&c.green), compose(&c.blue)] {
+        for v in lut {
+            bytes.extend_from_slice(&v.to_le_bytes());
+        }
+    }
+    Ok(tauri::ipc::Response::new(bytes))
+    }).await
+}
+
+/// A preset applied to the open image at thumbnail size, as a base64 PNG for the preset library.
+#[tauri::command]
+async fn preset_thumbnail(path: String, params: AdjustParams) -> Result<String, String> {
+    off_thread(move || -> Result<_, String> {
+        let small = preview_source(&path, PRESET_THUMB_SIDE)?;
+        let out = quartz_render(&small, &params);
+        let mut buf = Cursor::new(Vec::new());
+        DynamicImage::ImageRgba8(out).write_to(&mut buf, ImageFormat::Png).map_err(|e| e.to_string())?;
+        Ok(STANDARD.encode(buf.into_inner()))
+    })
+    .await
 }
 
 /// Exact Quartz export at full resolution.
 #[tauri::command]
-fn export_quartz(path: String, out_path: String, params: AdjustParams) -> Result<(), String> {
+async fn export_quartz(path: String, out_path: String, params: AdjustParams) -> Result<(), String> {
+    off_thread(move || -> Result<_, String> {
     let full = load(&path)?;
     quartz_render(&full, &params).save(&out_path).map_err(|e| format!("cannot write image: {e}"))
+    }).await
 }
 
 /// Writes a preset (JSON text) to a path the user chose in the save dialog.
 #[tauri::command]
 fn write_text_file(path: String, contents: String) -> Result<(), String> {
-    std::fs::write(&path, contents).map_err(|e| format!("cannot write file: {e}"))
+    // Written beside the target and renamed, so a reader (the plug-in waiting on a hand-off) never
+    // sees a half-written file.
+    let tmp = format!("{path}.tmp");
+    std::fs::write(&tmp, contents).map_err(|e| format!("cannot write file: {e}"))?;
+    std::fs::rename(&tmp, &path).map_err(|e| format!("cannot write file: {e}"))
 }
 
 /// Reads a preset (JSON text) from a path the user chose in the open dialog.
@@ -464,7 +584,8 @@ pub fn run() {
         .manage(PendingOpen::default())
         .invoke_handler(tauri::generate_handler![
             render_preview, export_image, write_text_file, read_text_file, image_size, render_crop,
-            quartz_presets, render_quartz_preview, render_quartz_crop, export_quartz, take_pending_open
+            quartz_presets, render_quartz_preview, render_quartz_crop, export_quartz, take_pending_open,
+            render_base_preview, render_base_crop, curve_luts, preset_thumbnail
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -523,7 +644,7 @@ mod tests {
     #[test]
     fn neutral_preview_is_scaled_to_the_preview_size() {
         let src = temp_png("neutral", 1200, 600);
-        let b64 = render_preview(src.clone(), Sliders::default()).unwrap();
+        let b64 = tauri::async_runtime::block_on(render_preview(src.clone(), Sliders::default())).unwrap();
         let decoded = image::load_from_memory(&STANDARD.decode(b64).unwrap()).unwrap().to_rgba8();
         assert_eq!(decoded.dimensions(), (960, 480));
         let _ = std::fs::remove_file(src);
@@ -533,7 +654,7 @@ mod tests {
     fn export_at_full_size_is_identical_when_neutral() {
         let src = temp_png("export", 64, 32);
         let out = std::env::temp_dir().join("photo-editor-test-export.png");
-        export_image(src.clone(), out.to_string_lossy().into_owned(), Sliders::default()).unwrap();
+        tauri::async_runtime::block_on(export_image(src.clone(), out.to_string_lossy().into_owned(), Sliders::default())).unwrap();
         let a = image::open(&src).unwrap().to_rgba8();
         let b = image::open(&out).unwrap().to_rgba8();
         assert_eq!(a.dimensions(), b.dimensions());
@@ -545,7 +666,7 @@ mod tests {
 
     #[test]
     fn missing_file_reports_an_error() {
-        assert!(render_preview("/nonexistent/x.png".into(), Sliders::default()).is_err());
+        assert!(tauri::async_runtime::block_on(render_preview("/nonexistent/x.png".into(), Sliders::default())).is_err());
     }
 
     #[test]

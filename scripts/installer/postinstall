@@ -1,0 +1,22 @@
+#!/bin/bash
+# Copies the Citrine Photoshop plug-in into every installed Photoshop. The installer runs this as root,
+# so the root-owned Plug-ins folders can be written. A missing Photoshop is not an install error.
+set -u
+APPS="${CITRINE_APPS_DIR:-/Applications}"
+SRC="$APPS/Citrine Labs.app/Contents/Resources/Citrine.plugin"
+if [ ! -d "$SRC" ]; then
+    echo "Citrine plug-in not found in the app; Photoshop was not changed."
+    exit 0
+fi
+installed=0
+for ps in "$APPS"/Adobe\ Photoshop*; do
+    dest="$ps/Plug-ins"
+    [ -d "$dest" ] || continue
+    rm -rf "$dest/Citrine.plugin"
+    if cp -R "$SRC" "$dest/"; then
+        installed=$((installed + 1))
+        echo "Citrine plug-in installed into $dest"
+    fi
+done
+echo "Citrine plug-in installed into $installed Photoshop folder(s)."
+exit 0

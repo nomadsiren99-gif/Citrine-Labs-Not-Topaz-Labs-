@@ -2,7 +2,9 @@ use crate::image_buffer::RgbImageF32;
 use crate::params::AdjustParams;
 use crate::stages::{
     adaptive_exposure::{adaptive_radius_px, apply_adaptive_exposure},
+    basic_correction::apply_basic_correction,
     basic_exposure::apply_basic_exposure,
+    grading::apply_color_grading,
     color_adjust::apply_color_adjust,
     curve::apply_curve,
     denoise::{apply_denoise, denoise_radius_px},
@@ -159,6 +161,10 @@ pub fn process_with_context(
 
     // 9. Curve Tool Stage (master + per-channel)
     apply_curve(&mut working, &params.curve);
+
+    // 9b. Basic correction (Camera Raw style) and three-zone colour grading
+    apply_basic_correction(&mut working, &params.basic_correction);
+    apply_color_grading(&mut working, &params.grading);
 
     // 10. Finishing Touches (Vignette, Grain, Warmth, and Master Transparency)
     apply_finishing(&mut working, input, &params.finishing, ctx);

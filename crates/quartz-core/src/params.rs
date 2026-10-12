@@ -322,6 +322,8 @@ impl Default for FinishingParams {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AdjustParams {
+    pub basic_correction: BasicCorrectionParams,
+    pub grading: ColorGradingParams,
     pub basic_exposure: BasicExposureParams,
     pub adaptive_exposure: AdaptiveExposureParams,
     pub details: DetailsParams,
@@ -432,5 +434,60 @@ impl AdjustParams {
         }
 
         p
+    }
+}
+
+/// Camera Raw style basic correction: exposure, contrast, highlights, shadows, whites, blacks.
+/// Exposure is in stops; the others are -1.0 .. 1.0 (0.0 = unchanged).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BasicCorrectionParams {
+    pub enabled: bool,
+    pub exposure: f32,
+    pub contrast: f32,
+    pub highlights: f32,
+    pub shadows: f32,
+    pub whites: f32,
+    pub blacks: f32,
+}
+
+impl Default for BasicCorrectionParams {
+    fn default() -> Self {
+        Self { enabled: true, exposure: 0.0, contrast: 0.0, highlights: 0.0, shadows: 0.0, whites: 0.0, blacks: 0.0 }
+    }
+}
+
+/// One colour wheel: hue in degrees, saturation 0.0 .. 1.0, luminance -1.0 .. 1.0.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ColorWheel {
+    pub hue: f32,
+    pub sat: f32,
+    pub lum: f32,
+}
+
+/// Colour grading with three wheels: shadows, midtones and highlights. Blending widens the
+/// transition between zones (0.0 .. 1.0); balance moves the midtone centre (-1.0 .. 1.0).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ColorGradingParams {
+    pub enabled: bool,
+    pub shadows: ColorWheel,
+    pub midtones: ColorWheel,
+    pub highlights: ColorWheel,
+    pub blending: f32,
+    pub balance: f32,
+}
+
+impl Default for ColorGradingParams {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            shadows: ColorWheel::default(),
+            midtones: ColorWheel::default(),
+            highlights: ColorWheel::default(),
+            blending: 0.5,
+            balance: 0.0,
+        }
     }
 }
