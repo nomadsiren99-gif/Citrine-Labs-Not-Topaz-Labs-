@@ -21,6 +21,9 @@ body { margin: 0; }
 .histogram { height: 60px; width: 100%; background: #0a0b0d; }
 .viewport { overflow: hidden; }
 .viewport.zoom-fit img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.viewport.zoom-fit { position: relative; }
+/* Brush circle: the size of the dab the brush will paint. */
+.brush-cursor { position: absolute; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); pointer-events: none; }
 .section { border-bottom: 1px solid #2a2d36; padding: 4px 0; }
 .section header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 6px 0; font-size: 14px; }
 .section header button { padding: 2px 8px; font-size: 12px; }
@@ -233,4 +236,5 @@ select { background: #0f1014; color: inherit; border: 1px solid #333; border-rad
 .right .section header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .right .section header > span:last-child { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .right .section header > span:first-child { white-space: nowrap; }
+
 

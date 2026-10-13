@@ -3,7 +3,7 @@
 //! Presets are written with a small builder ([`P`]) so each look is one readable line
 //! instead of a 60-line struct literal.
 
-use crate::params::{pts, AdjustParams, CurveParams};
+use crate::params::{pts, AdaptiveExposureParams, AdjustParams, BasicCorrectionParams, ColorWheel, CurveParams, DetailsParams, VignetteParams};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -49,6 +49,7 @@ pub const FILM: &str = "Film Collection";
 pub const TONED: &str = "Toned Collection";
 pub const STYLIZED: &str = "Stylized Collection";
 pub const ADJUST4: &str = "Adjust 4 Preset List";
+pub const SPORTS: &str = "Sports Posters";
 
 /// The curated "Adjust 4 Preset List": highlights drawn from every collection.
 const ADJUST4_LIST: &[&str] = &[
@@ -91,6 +92,11 @@ pub fn get_collections() -> Vec<PresetCollection> {
             name: VIBRANT,
             description: "Punchy colour and contrast",
             presets: members(VIBRANT),
+        },
+        PresetCollection {
+            name: SPORTS,
+            description: "Looks built from sports poster tones",
+            presets: members(SPORTS),
         },
         PresetCollection {
             name: HDR,
@@ -303,6 +309,138 @@ fn painting() -> P {
 
 #[rustfmt::skip]
 static FACTORY: &[Recipe] = &[
+    // ===== Sports Posters ===================================================
+    // One preset per sports poster example, derived from its measured tones (luma range, colour cast of
+    // shadows and highlights, skin warmth, corner falloff, grain). Starting points to tune by eye.
+    ("Sports Look 08 Warm Shadow Rose", SPORTS, "Rose shadows, warm skin, lifted corners", || {
+        let mut p = P::new();
+        p.0.basic_correction = BasicCorrectionParams { exposure: 0.06, contrast: -0.04, highlights: 0.0, shadows: 0.0, whites: 0.12, blacks: -0.01, ..Default::default() };
+        p.0.grading.shadows = ColorWheel { hue: 317.0, sat: 0.20, lum: 0.0 };
+        p.0.grading.midtones = ColorWheel { hue: 30.0, sat: 0.11, lum: 0.0 };
+        p.0.grading.highlights = ColorWheel { hue: 27.0, sat: 0.00, lum: 0.0 };
+        p.0.color.saturation = -0.01;
+        p.0.finishing.vignette = VignetteParams { amount: 0.10, size: 0.6, transition: 0.5, roundness: 0.0 };
+        p.0.finishing.grain = crate::params::GrainParams { amount: 0.10, size: 1.0 };
+        p
+    }),
+    ("Sports Look 09 Deep Blue Vivid", SPORTS, "Saturated blue shadows, dark corners, strong contrast", || {
+        let mut p = P::new();
+        p.0.basic_correction = BasicCorrectionParams { exposure: 0.12, contrast: -0.07, highlights: 0.0, shadows: 0.0, whites: 0.16, blacks: -0.06, ..Default::default() };
+        p.0.grading.shadows = ColorWheel { hue: 228.0, sat: 0.43, lum: 0.0 };
+        p.0.grading.midtones = ColorWheel { hue: 30.0, sat: 0.14, lum: 0.0 };
+        p.0.grading.highlights = ColorWheel { hue: 335.0, sat: 0.10, lum: 0.0 };
+        p.0.color.saturation = 0.15;
+        p.0.finishing.vignette = VignetteParams { amount: -0.19, size: 0.6, transition: 0.5, roundness: 0.0 };
+        p.0.finishing.grain = crate::params::GrainParams { amount: 0.10, size: 1.0 };
+        p
+    }),
+    ("Sports Look 10 Low Key Blue", SPORTS, "Low key with blue shadows and deep skin tones", || {
+        let mut p = P::new();
+        p.0.basic_correction = BasicCorrectionParams { exposure: 0.22, contrast: 0.14, highlights: 0.0, shadows: 0.0, whites: -0.20, blacks: -0.05, ..Default::default() };
+        p.0.grading.shadows = ColorWheel { hue: 235.0, sat: 0.31, lum: 0.0 };
+        p.0.grading.midtones = ColorWheel { hue: 30.0, sat: 0.08, lum: 0.0 };
+        p.0.grading.highlights = ColorWheel { hue: 0.0, sat: 0.15, lum: 0.0 };
+        p.0.color.saturation = 0.08;
+        p.0.finishing.vignette = VignetteParams { amount: -0.04, size: 0.6, transition: 0.5, roundness: 0.0 };
+        p.0.finishing.grain = crate::params::GrainParams { amount: 0.01, size: 1.0 };
+        p
+    }),
+    ("Sports Look 11 Night Vivid", SPORTS, "Very dark night look with vivid blue and magenta", || {
+        let mut p = P::new();
+        p.0.basic_correction = BasicCorrectionParams { exposure: 0.30, contrast: 0.15, highlights: 0.0, shadows: 0.0, whites: -0.20, blacks: -0.08, ..Default::default() };
+        p.0.grading.shadows = ColorWheel { hue: 243.0, sat: 0.34, lum: 0.0 };
+        p.0.grading.midtones = ColorWheel { hue: 30.0, sat: 0.12, lum: 0.0 };
+        p.0.grading.highlights = ColorWheel { hue: 324.0, sat: 0.30, lum: 0.0 };
+        p.0.color.saturation = 0.20;
+        p.0.finishing.vignette = VignetteParams { amount: -0.10, size: 0.6, transition: 0.5, roundness: 0.0 };
+        p.0.finishing.grain = crate::params::GrainParams { amount: 0.02, size: 1.0 };
+        p
+    }),
+    ("Sports Look 12 Bright Teal Clean", SPORTS, "Bright high key with teal shadows and soft colour", || {
+        let mut p = P::new();
+        p.0.basic_correction = BasicCorrectionParams { exposure: -0.33, contrast: 0.04, highlights: 0.0, shadows: 0.0, whites: 0.12, blacks: 0.16, ..Default::default() };
+        p.0.grading.shadows = ColorWheel { hue: 173.0, sat: 0.23, lum: 0.0 };
+        p.0.grading.midtones = ColorWheel { hue: 30.0, sat: 0.12, lum: 0.0 };
+        p.0.grading.highlights = ColorWheel { hue: 51.0, sat: 0.00, lum: 0.0 };
+        p.0.color.saturation = -0.06;
+        p.0.finishing.vignette = VignetteParams { amount: 0.00, size: 0.6, transition: 0.5, roundness: 0.0 };
+        p.0.finishing.grain = crate::params::GrainParams { amount: 0.10, size: 1.0 };
+        p
+    }),
+    ("Sports Look 13 Airy Blue Light", SPORTS, "Airy midtones, light corners, cool shadows", || {
+        let mut p = P::new();
+        p.0.basic_correction = BasicCorrectionParams { exposure: -0.09, contrast: 0.05, highlights: 0.0, shadows: 0.0, whites: 0.08, blacks: 0.16, ..Default::default() };
+        p.0.grading.shadows = ColorWheel { hue: 246.0, sat: 0.18, lum: 0.0 };
+        p.0.grading.midtones = ColorWheel { hue: 30.0, sat: 0.11, lum: 0.0 };
+        p.0.grading.highlights = ColorWheel { hue: 45.0, sat: 0.04, lum: 0.0 };
+        p.0.color.saturation = -0.01;
+        p.0.finishing.vignette = VignetteParams { amount: 0.19, size: 0.6, transition: 0.5, roundness: 0.0 };
+        p.0.finishing.grain = crate::params::GrainParams { amount: 0.09, size: 1.0 };
+        p
+    }),
+    ("Sports Look 14 Soft Neutral High", SPORTS, "Soft high key, muted colour, neutral highlights", || {
+        let mut p = P::new();
+        p.0.basic_correction = BasicCorrectionParams { exposure: -0.30, contrast: -0.01, highlights: 0.0, shadows: 0.0, whites: 0.08, blacks: 0.04, ..Default::default() };
+        p.0.grading.shadows = ColorWheel { hue: 230.0, sat: 0.18, lum: 0.0 };
+        p.0.grading.midtones = ColorWheel { hue: 30.0, sat: 0.09, lum: 0.0 };
+        p.0.grading.highlights = ColorWheel { hue: 100.0, sat: 0.00, lum: 0.0 };
+        p.0.color.saturation = -0.09;
+        p.0.finishing.vignette = VignetteParams { amount: -0.10, size: 0.6, transition: 0.5, roundness: 0.0 };
+        p.0.finishing.grain = crate::params::GrainParams { amount: 0.12, size: 1.0 };
+        p
+    }),
+    ("Sports Look 15 Blue Hour Grain", SPORTS, "Blue hour shadows, heavy grain, bright corners", || {
+        let mut p = P::new();
+        p.0.basic_correction = BasicCorrectionParams { exposure: -0.03, contrast: -0.08, highlights: 0.0, shadows: 0.0, whites: 0.20, blacks: -0.06, ..Default::default() };
+        p.0.grading.shadows = ColorWheel { hue: 211.0, sat: 0.28, lum: 0.0 };
+        p.0.grading.midtones = ColorWheel { hue: 30.0, sat: 0.13, lum: 0.0 };
+        p.0.grading.highlights = ColorWheel { hue: 2.0, sat: 0.00, lum: 0.0 };
+        p.0.color.saturation = -0.02;
+        p.0.finishing.vignette = VignetteParams { amount: 0.12, size: 0.6, transition: 0.5, roundness: 0.0 };
+        p.0.finishing.grain = crate::params::GrainParams { amount: 0.18, size: 1.0 };
+        p
+    }),
+    ("Sports Look 16 Midnight Blue Grain", SPORTS, "Midnight blue shadows with fine grain", || {
+        let mut p = P::new();
+        p.0.basic_correction = BasicCorrectionParams { exposure: 0.22, contrast: -0.04, highlights: 0.0, shadows: 0.0, whites: 0.08, blacks: -0.02, ..Default::default() };
+        p.0.grading.shadows = ColorWheel { hue: 224.0, sat: 0.23, lum: 0.0 };
+        p.0.grading.midtones = ColorWheel { hue: 30.0, sat: 0.09, lum: 0.0 };
+        p.0.grading.highlights = ColorWheel { hue: 254.0, sat: 0.05, lum: 0.0 };
+        p.0.color.saturation = 0.01;
+        p.0.finishing.vignette = VignetteParams { amount: -0.01, size: 0.6, transition: 0.5, roundness: 0.0 };
+        p.0.finishing.grain = crate::params::GrainParams { amount: 0.14, size: 1.0 };
+        p
+    }),
+    ("Sports Look 17 Emerald Shadow", SPORTS, "Emerald green shadows, bright corners, warm skin", || {
+        let mut p = P::new();
+        p.0.basic_correction = BasicCorrectionParams { exposure: -0.07, contrast: -0.03, highlights: 0.0, shadows: 0.0, whites: 0.12, blacks: 0.01, ..Default::default() };
+        p.0.grading.shadows = ColorWheel { hue: 116.0, sat: 0.29, lum: 0.0 };
+        p.0.grading.midtones = ColorWheel { hue: 30.0, sat: 0.14, lum: 0.0 };
+        p.0.grading.highlights = ColorWheel { hue: 157.0, sat: 0.00, lum: 0.0 };
+        p.0.color.saturation = 0.08;
+        p.0.finishing.vignette = VignetteParams { amount: 0.16, size: 0.6, transition: 0.5, roundness: 0.0 };
+        p.0.finishing.grain = crate::params::GrainParams { amount: 0.11, size: 1.0 };
+        p
+    }),
+    ("Sports Look 18 Quiet Blue Grain", SPORTS, "Quiet blue shadows with visible grain", || {
+        let mut p = P::new();
+        p.0.basic_correction = BasicCorrectionParams { exposure: 0.06, contrast: -0.02, highlights: 0.0, shadows: 0.0, whites: 0.04, blacks: 0.02, ..Default::default() };
+        p.0.grading.shadows = ColorWheel { hue: 228.0, sat: 0.12, lum: 0.0 };
+        p.0.grading.midtones = ColorWheel { hue: 30.0, sat: 0.09, lum: 0.0 };
+        p.0.grading.highlights = ColorWheel { hue: 278.0, sat: 0.00, lum: 0.0 };
+        p.0.color.saturation = -0.05;
+        p.0.finishing.vignette = VignetteParams { amount: 0.09, size: 0.6, transition: 0.5, roundness: 0.0 };
+        p.0.finishing.grain = crate::params::GrainParams { amount: 0.18, size: 1.0 };
+        p
+    }),
+    ("Sports Look 19 Dodge and Burn", SPORTS, "One-step dodge and burn: lifts dark areas and pulls back bright ones, strong local contrast", || {
+        let mut p = P::new();
+        // Small local zones (many regions), strong local lift and pull, no highlight or shadow protection.
+        p.0.adaptive_exposure = AdaptiveExposureParams { enabled: true, adaptive_exposure: 1.4, regions: 22, contrast: 0.7, brightness: 0.0, protect_highlights: 0.0, protect_shadows: 0.0 };
+        p.0.details = DetailsParams { strength: 0.45, detail_boost: 1.2, threshold: 0.08, radius: 2.0, ..Default::default() };
+        p.0.basic_correction = BasicCorrectionParams { contrast: 0.15, blacks: -0.08, whites: 0.10, ..Default::default() };
+        p
+    }),
     // ===== Classic Collection ==============================================
     ("Brilliant Cold", CLASSIC, "Crisp, luminous rendering with a cool cast", || pop(1.0).warmth(-0.25)),
     ("Brilliant Warm", CLASSIC, "Crisp, luminous rendering with a warm glow", || pop(1.0).warmth(0.25)),

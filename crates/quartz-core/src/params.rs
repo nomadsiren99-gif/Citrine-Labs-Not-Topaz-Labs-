@@ -333,6 +333,26 @@ pub struct AdjustParams {
     pub tone: ToneParams,
     pub curve: CurveParams,
     pub finishing: FinishingParams,
+    /// Brush dabs for the local tools. The pipeline ignores them; the app applies them after it.
+    pub brush: Vec<BrushDab>,
+}
+
+
+
+
+/// One brush dab. Position and radius are fractions of the image (radius of the shorter side).
+/// `kind`: 0 Dodge, 1 Burn, 2 Smooth, 3 Brush Out, 4 Erase. `group` ties the dabs of one stroke.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BrushDab {
+    pub kind: u8,
+    pub x: f32,
+    pub y: f32,
+    pub radius: f32,
+    pub hardness: f32,
+    pub opacity: f32,
+    pub strength: f32,
+    pub group: u32,
 }
 
 /// Clamps `v` into `[lo, hi]`, replacing NaN/infinite values with `default`.

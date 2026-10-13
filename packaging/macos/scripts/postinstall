@@ -1,0 +1,41 @@
+#!/bin/bash
+# Runs as root after the Citrine Labs installer puts the app and the plug-in payload in place.
+# Copies Citrine.plugin into every installed Photoshop "Plug-ins" folder. Never fails the install:
+# with no Photoshop found, the plug-in stays in the payload folder and the app still works.
+#
+# CITRINE_PS_DIRS (testing only): a colon-separated list of Plug-ins folders to use instead of the search.
+# Set to an empty string to skip the search entirely.
+
+PAYLOAD="/Library/Application Support/Citrine Labs/Photoshop/Citrine-plugin"
+
+if [ "${CITRINE_PS_DIRS+set}" = "set" ]; then
+  # Set, even if empty: use exactly this list and do not search.
+  DIRS=()
+  [ -n "$CITRINE_PS_DIRS" ] && IFS=':' read -r -a DIRS <<< "$CITRINE_PS_DIRS"
+else
+  DIRS=()
+  for app in /Applications/Adobe\ Photoshop*; do
+    [ -d "$app/Plug-ins" ] && DIRS+=("$app/Plug-ins")
+  done
+fi
+
+if [ ! -d "$PAYLOAD" ]; then
+  echo "Citrine Labs: plug-in payload missing, skipping Photoshop install"
+  exit 0
+fi
+
+if [ "${#DIRS[@]}" -eq 0 ]; then
+  echo "Citrine Labs: no Adobe Photoshop Plug-ins folder found, plug-in not installed"
+  exit 0
+fi
+
+for dir in "${DIRS[@]}"; do
+  [ -d "$dir" ] || continue
+  rm -rf "$dir/Citrine.plugin"
+  if ditto "$PAYLOAD" "$dir/Citrine.plugin"; then
+    echo "Citrine Labs: installed plug-in to $dir"
+  else
+    echo "Citrine Labs: could not copy plug-in to $dir"
+  fi
+done
+exit 0

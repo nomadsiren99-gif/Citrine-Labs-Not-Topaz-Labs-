@@ -12,40 +12,34 @@ struct Params { w: u32, h: u32, r: u32, dir: u32 };
 @group(0) @binding(1) var<storage, read> src: array<f32>;
 @group(0) @binding(2) var<storage, read_write> dst: array<f32>;
 
-// One invocation per row (dir 0) or per column (dir 1), sliding a running sum: O(1) per pixel,
-// so the cost does not grow with the radius.
+// dir 1: running-sum box blur down each column, one thread per column. Threads in a warp read
+// neighbouring columns, so the reads coalesce. The cost does not grow with the radius.
+// dir 2: transpose a w x h matrix into h x w, one thread per element (coalesced reads).
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    if (p.dir == 2u) {
+        if (id.x >= p.w * p.h) {
+            return;
+        }
+        let y = id.x / p.w;
+        let x = id.x % p.w;
+        dst[x * p.h + y] = src[id.x];
+        return;
+    }
+    if (id.x >= p.w) {
+        return;
+    }
     let r = i32(p.r);
     let inv = 1.0 / f32(2 * r + 1);
-    if (p.dir == 0u) {
-        if (id.x >= p.h) {
-            return;
-        }
-        let row = id.x * p.w;
-        let last = i32(p.w) - 1;
-        var sum = 0.0;
-        for (var k = -r; k <= r; k = k + 1) {
-            sum = sum + src[row + u32(clamp(k, 0, last))];
-        }
-        for (var x = 0; x < i32(p.w); x = x + 1) {
-            dst[row + u32(x)] = sum * inv;
-            sum = sum + src[row + u32(clamp(x + r + 1, 0, last))] - src[row + u32(clamp(x - r, 0, last))];
-        }
-    } else {
-        if (id.x >= p.w) {
-            return;
-        }
-        let col = id.x;
-        let last = i32(p.h) - 1;
-        var sum = 0.0;
-        for (var k = -r; k <= r; k = k + 1) {
-            sum = sum + src[u32(clamp(k, 0, last)) * p.w + col];
-        }
-        for (var y = 0; y < i32(p.h); y = y + 1) {
-            dst[u32(y) * p.w + col] = sum * inv;
-            sum = sum + src[u32(clamp(y + r + 1, 0, last)) * p.w + col] - src[u32(clamp(y - r, 0, last)) * p.w + col];
-        }
+    let col = id.x;
+    let last = i32(p.h) - 1;
+    var sum = 0.0;
+    for (var k = -r; k <= r; k = k + 1) {
+        sum = sum + src[u32(clamp(k, 0, last)) * p.w + col];
+    }
+    for (var y = 0; y < i32(p.h); y = y + 1) {
+        dst[u32(y) * p.w + col] = sum * inv;
+        sum = sum + src[u32(clamp(y + r + 1, 0, last)) * p.w + col] - src[u32(clamp(y - r, 0, last)) * p.w + col];
     }
 }
 "#;
@@ -145,13 +139,21 @@ pub fn box_blur(src: &[f32], w: usize, h: usize, r: usize) -> Option<Vec<f32>> {
     };
     let buf_a = storage("a");
     let buf_b = storage("b");
+    let buf_c = storage("c");
     g.queue.write_buffer(&buf_a, 0, &to_bytes(src));
 
+    // Blur the rows by transposing, blurring the columns of the transpose, and transposing back.
+    // Then blur the columns. Every pass reads and writes contiguous memory.
     let mut encoder = g.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-    // Horizontal pass a -> b, then vertical pass b -> a.
-    for (dir, input, output) in [(0u32, &buf_a, &buf_b), (1u32, &buf_b, &buf_a)] {
+    let passes = [
+        (2u32, w, h, 0, &buf_a, &buf_b),   // A (w x h) -> B = transpose, h x w
+        (1u32, h, w, r, &buf_b, &buf_c),   // blur columns of B: the row blur of A
+        (2u32, h, w, 0, &buf_c, &buf_b),   // back to w x h
+        (1u32, w, h, r, &buf_b, &buf_a),   // blur columns: the result
+    ];
+    for (dir, pw, ph, radius, input, output) in passes {
         let mut params = Vec::with_capacity(16);
-        for v in [w as u32, h as u32, r as u32, dir] {
+        for v in [pw as u32, ph as u32, radius as u32, dir] {
             params.extend_from_slice(&v.to_le_bytes());
         }
         let uniform = g.device.create_buffer(&wgpu::BufferDescriptor {
@@ -173,8 +175,8 @@ pub fn box_blur(src: &[f32], w: usize, h: usize, r: usize) -> Option<Vec<f32>> {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None, timestamp_writes: None });
         pass.set_pipeline(&g.pipeline);
         pass.set_bind_group(0, &bind, &[]);
-        // Horizontal pass: one thread per row. Vertical pass: one thread per column.
-        let threads = if dir == 0 { h as u32 } else { w as u32 };
+        // Column blur: one thread per column. Transpose: one thread per element.
+        let threads = if dir == 2 { (pw * ph) as u32 } else { pw as u32 };
         pass.dispatch_workgroups(threads.div_ceil(256), 1, 1);
     }
 

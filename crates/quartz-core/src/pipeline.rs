@@ -5,7 +5,7 @@ use crate::stages::{
     basic_correction::apply_basic_correction,
     basic_exposure::apply_basic_exposure,
     grading::apply_color_grading,
-    color_adjust::apply_color_adjust,
+    color_adjust::{apply_color_adjust, color_radius_px},
     curve::apply_curve,
     denoise::{apply_denoise, denoise_radius_px},
     details::{apply_detail_layer, apply_details, detail_radius_px, extract_detail_layer},
@@ -103,6 +103,9 @@ fn filter_margin(params: &AdjustParams, ctx: &RenderContext) -> usize {
     if params.stylize.enabled {
         reach += stylize_reach_px(&params.stylize, ctx);
     }
+    if params.color.enabled {
+        reach += color_radius_px(&params.color, ctx);
+    }
     reach + 2
 }
 
@@ -148,7 +151,7 @@ pub fn process_with_context(
     }
 
     // 5. Color & Adaptive Saturation Stage
-    apply_color_adjust(&mut working, &params.color);
+    apply_color_adjust(&mut working, &params.color, ctx);
 
     // 6. Noise Suppression Stage
     apply_denoise(&mut working, &params.noise, ctx);
