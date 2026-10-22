@@ -103,10 +103,6 @@ Not yet verified: golden-image tests against fixture photos, ICC handling,
 - **Not Topaz Labs.** No code, model or asset is taken from Topaz Labs or Topaz
   Adjust AI. The reference folder used during the project is kept separate and
   its executable was never run (D1, D5).
-- **Quartz presets.** The Quartz presets are described by their author as
-  reverse-engineered from Topaz Adjust 4 looks. They are kept because the author
-  asked for them, but this is a licensing risk. Decide whether they can be used
-  before any public release (D10, D12).
 - **Bundled model.** `crates/engine/models/treenet_denoise_super_light.onnx` comes
   from the RawForge project under the MIT licence. Its provenance and checksum are
   in [`crates/engine/models/README.md`](crates/engine/models/README.md).
