@@ -811,6 +811,25 @@ fn cancel_other_handoffs(except: String) -> Result<(), String> {
     Ok(())
 }
 
+/// A file opened from Finder or Photoshop: tell the window to load it. macOS only; other systems have no such event.
+#[cfg(target_os = "macos")]
+fn open_from_event(app: &tauri::AppHandle, event: &tauri::RunEvent) {
+    if let tauri::RunEvent::Opened { urls } = event {
+        for url in urls {
+            if let Ok(p) = url.to_file_path() {
+                let path = p.to_string_lossy().to_string();
+                if let Ok(mut pending) = app.state::<PendingOpen>().0.lock() {
+                    *pending = Some(path.clone());
+                }
+                let _ = tauri::Emitter::emit(app, "open-file", path);
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn open_from_event(_app: &tauri::AppHandle, _event: &tauri::RunEvent) {}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -839,18 +858,7 @@ pub fn run() {
                     write_cancel_if_pending(&std::path::Path::new(&home).join("Library/Caches/Citrine"));
                 }
             }
-            // A file opened from Finder or Photoshop: tell the window to load it.
-            if let tauri::RunEvent::Opened { urls } = event {
-                for url in urls {
-                    if let Ok(p) = url.to_file_path() {
-                        let path = p.to_string_lossy().to_string();
-                        if let Ok(mut pending) = app.state::<PendingOpen>().0.lock() {
-                            *pending = Some(path.clone());
-                        }
-                        let _ = tauri::Emitter::emit(app, "open-file", path);
-                    }
-                }
-            }
+            open_from_event(app, &event);
         });
 }
 
