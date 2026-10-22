@@ -9,9 +9,6 @@ export type Grading = {
 };
 
 
-// One brush dab for the local tools (fractions of the image). Applied by the app after the pipeline.
-export type BrushDab = { kind: number; x: number; y: number; radius: number; hardness: number; opacity: number; strength: number; group: number };
-
 export type LsParams = {
   basic_correction: { enabled: boolean; exposure: number; contrast: number; highlights: number; shadows: number; whites: number; blacks: number };
   grading: Grading;
@@ -32,7 +29,6 @@ export type LsParams = {
     grain: { amount: number; size: number };
     border: { enabled: boolean; thickness: number; color: [number, number, number] };
   };
-  brush: BrushDab[];
 };
 
 // Defaults exactly as Quartz's Default impls (params.rs).
@@ -55,7 +51,6 @@ export const LS_DEFAULT: LsParams = {
     grain: { amount: 0, size: 1 },
     border: { enabled: false, thickness: 0, color: [1, 1, 1] },
   },
-  brush: [],
 };
 
 export type Field = { path: string; label: string; min: number; max: number; step: number; int?: boolean };

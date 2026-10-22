@@ -9,7 +9,7 @@ pub mod stages;
 // Re-exports for convenient usage
 pub use image_buffer::{open_oriented, RgbImageF32};
 pub use params::{
-    AdaptiveExposureParams, AdjustParams, BasicExposureParams, BorderParams, BrushDab, ColorParams,
+    AdaptiveExposureParams, AdjustParams, BasicExposureParams, BorderParams, ColorParams,
     CurveParams, CurvePoint, DetailsParams, FinishingParams, GrainParams, NoiseParams,
     StylizeParams, ToneParams, VignetteParams,
 };

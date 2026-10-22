@@ -11,7 +11,7 @@ use engine::finishing::Finishing;
 use engine::local::{Stroke, StrokeKind};
 use engine::noise::Denoise;
 use engine::quartz_exact::{
-    image_buffer::RgbImageF32, params::{AdjustParams, BrushDab}, pipeline::{process_image, process_region}, preset::get_factory_presets, preset::Preset,
+    image_buffer::RgbImageF32, params::AdjustParams, pipeline::{process_image, process_region}, preset::get_factory_presets, preset::Preset,
 };
 use engine::{apply_look, BasicExposure, LinearImage, Look, Style};
 use image::{imageops::FilterType, DynamicImage, ImageFormat, RgbaImage};
@@ -372,63 +372,8 @@ fn quartz_presets() -> Vec<Preset> {
     get_factory_presets()
 }
 
-/// Brush dabs as engine strokes. Dabs with a non-finite value are dropped rather than failing the render.
-fn brush_strokes(brush: &[BrushDab]) -> Vec<Stroke> {
-    brush
-        .iter()
-        .filter(|d| [d.x, d.y, d.radius, d.hardness, d.opacity, d.strength].iter().all(|v| v.is_finite()))
-        .map(|d| Stroke {
-            kind: kind_of(d.kind),
-            center: [d.x, d.y],
-            radius: d.radius,
-            hardness: d.hardness,
-            opacity: d.opacity,
-            overall_strength: d.strength,
-            edge_aware: 0.0,
-        })
-        .collect()
-}
 
-/// Applies the brush dabs to an 8-bit RGBA image (preview and zoom). Alpha is kept.
-fn apply_brush_rgba(img: &mut RgbaImage, brush: &[BrushDab]) -> Result<(), String> {
-    let strokes = brush_strokes(brush);
-    if strokes.is_empty() {
-        return Ok(());
-    }
-    let (w, h) = img.dimensions();
-    let mut lin = LinearImage::from_srgb8(w as usize, h as usize, img.as_raw()).map_err(|e| e.to_string())?;
-    let original = lin.clone();
-    engine::local::apply(&mut lin, &original, &strokes).map_err(|e| e.to_string())?;
-    let out = lin.to_srgb8();
-    for (px, c) in img.pixels_mut().zip(out.chunks_exact(4)) {
-        px.0 = [c[0], c[1], c[2], px.0[3]];
-    }
-    Ok(())
-}
 
-/// Applies the brush dabs to a float RGB image at full precision (export). Goes through 16-bit sRGB,
-/// which is finer than any source file the app writes back.
-fn apply_brush_rgb(img: &mut RgbImageF32, brush: &[BrushDab]) -> Result<(), String> {
-    let strokes = brush_strokes(brush);
-    if strokes.is_empty() {
-        return Ok(());
-    }
-    let q = |v: f32| (v.clamp(0.0, 1.0) * 65535.0).round() as u16;
-    let mut buf = Vec::with_capacity(img.r.len() * 4);
-    for i in 0..img.r.len() {
-        buf.extend_from_slice(&[q(img.r[i]), q(img.g[i]), q(img.b[i]), 65535]);
-    }
-    let mut lin = LinearImage::from_srgb16(img.width, img.height, &buf).map_err(|e| e.to_string())?;
-    let original = lin.clone();
-    engine::local::apply(&mut lin, &original, &strokes).map_err(|e| e.to_string())?;
-    let out = lin.to_srgb16();
-    for i in 0..img.r.len() {
-        img.r[i] = out[i * 4] as f32 / 65535.0;
-        img.g[i] = out[i * 4 + 1] as f32 / 65535.0;
-        img.b[i] = out[i * 4 + 2] as f32 / 65535.0;
-    }
-    Ok(())
-}
 
 
 
@@ -451,17 +396,10 @@ fn quartz_base(src: &RgbaImage, params: &AdjustParams) -> RgbaImage {
     result
 }
 
-/// Brush dabs, then dodge and burn layers, on a base render. Fast: masks and gains only.
-fn finish_layers(img: &mut RgbaImage, params: &AdjustParams) {
-    // A brush error leaves the image without dabs rather than failing the preview.
-    let _ = apply_brush_rgba(img, &params.brush);
-}
 
 /// Cache key for a base render: every setting except the brush and the layers, which are applied later.
 fn base_key(params: &AdjustParams) -> String {
-    let mut p = params.clone();
-    p.brush.clear();
-    serde_json::to_string(&p).unwrap_or_default()
+    serde_json::to_string(params).unwrap_or_default()
 }
 
 /// The base render for `params` (without layers) on `src`, reused while the slider settings stay the same.
@@ -483,9 +421,7 @@ fn cached_base(cache: &std::sync::Mutex<Option<(String, RgbaImage)>>, key_prefix
 
 /// Quartz render with the brush and layers applied (used for the full image in export-like paths).
 fn quartz_render(src: &RgbaImage, params: &AdjustParams) -> RgbaImage {
-    let mut result = quartz_base(src, params);
-    finish_layers(&mut result, params);
-    result
+    quartz_base(src, params)
 }
 
 /// Cached base render for the preview (per path and size), and for the spatial GPU base.
@@ -526,8 +462,7 @@ fn preview_source(path: &str, side: u32) -> Result<RgbaImage, String> {
 async fn render_quartz_preview(path: String, params: AdjustParams, side: Option<u32>) -> Result<String, String> {
     off_thread(move || -> Result<_, String> {
     let small = preview_source(&path, side.unwrap_or(PREVIEW_MAX_SIDE))?;
-    let mut out = cached_base(&PREVIEW_BASE, &format!("{path}|{}", small.width()), &small, &params);
-    finish_layers(&mut out, &params);
+    let out = cached_base(&PREVIEW_BASE, &format!("{path}|{}", small.width()), &small, &params);
     let mut buf = Cursor::new(Vec::new());
     DynamicImage::ImageRgba8(out).write_to(&mut buf, ImageFormat::Png).map_err(|e| e.to_string())?;
     Ok(STANDARD.encode(buf.into_inner()))
@@ -554,7 +489,6 @@ fn crop_cached(
     cache: &std::sync::Mutex<Option<(String, String, RgbaImage)>>,
     path: &str,
     render: &AdjustParams,
-    finish: &AdjustParams,
     (x, y, w, h): (u32, u32, u32, u32),
 ) -> Result<tauri::ipc::Response, String> {
     let key_json = base_key(render);
@@ -565,9 +499,7 @@ fn crop_cached(
         *cache = Some((path.to_string(), key_json, quartz_base(&full, render)));
     }
     let (_, _, base) = cache.as_ref().expect("cache filled above");
-    let mut out = base.clone();
-    finish_layers(&mut out, finish);
-    let out = &out;
+    let out = base;
     let x = x.min(out.width().saturating_sub(1));
     let y = y.min(out.height().saturating_sub(1));
     let w = w.min(out.width() - x).max(1);
@@ -579,7 +511,7 @@ fn crop_cached(
 #[tauri::command]
 async fn render_quartz_crop(path: String, params: AdjustParams, x: u32, y: u32, w: u32, h: u32) -> Result<tauri::ipc::Response, String> {
     off_thread(move || -> Result<_, String> {
-    crop_cached(&ZOOM_QUARTZ, &path, &params, &params, (x, y, w, h))
+    crop_cached(&ZOOM_QUARTZ, &path, &params, (x, y, w, h))
     }).await
 }
 
@@ -601,8 +533,7 @@ fn spatial_only(params: &AdjustParams) -> AdjustParams {
 async fn render_base_preview(path: String, params: AdjustParams, side: Option<u32>) -> Result<tauri::ipc::Response, String> {
     off_thread(move || -> Result<_, String> {
     let small = preview_source(&path, side.unwrap_or(PREVIEW_MAX_SIDE))?;
-    let mut out = cached_base(&SPATIAL_BASE, &format!("{path}|{}", small.width()), &small, &spatial_only(&params));
-    finish_layers(&mut out, &params);
+    let out = cached_base(&SPATIAL_BASE, &format!("{path}|{}", small.width()), &small, &spatial_only(&params));
     Ok(raw_response(&out))
     }).await
 }
@@ -611,7 +542,7 @@ async fn render_base_preview(path: String, params: AdjustParams, side: Option<u3
 #[tauri::command]
 async fn render_base_crop(path: String, params: AdjustParams, x: u32, y: u32, w: u32, h: u32) -> Result<tauri::ipc::Response, String> {
     off_thread(move || -> Result<_, String> {
-    crop_cached(&ZOOM_BASE, &path, &spatial_only(&params), &params, (x, y, w, h))
+    crop_cached(&ZOOM_BASE, &path, &spatial_only(&params), (x, y, w, h))
     }).await
 }
 
@@ -775,8 +706,7 @@ fn process_tiled(full: &RgbImageF32, params: &AdjustParams, tile: usize) -> RgbI
 fn export_quartz_sync(path: &str, out_path: &str, params: &AdjustParams) -> Result<(), String> {
     let (full, deep) = decode_full(path)?;
     check_size(full.width, full.height)?;
-    let mut processed = process_tiled(&full, params, EXPORT_TILE);
-    apply_brush_rgb(&mut processed, &params.brush)?;
+    let processed = process_tiled(&full, params, EXPORT_TILE);
     write_export(&processed, out_path, deep)
 }
 
@@ -854,9 +784,31 @@ fn take_pending_open(state: tauri::State<PendingOpen>) -> Option<String> {
 /// Photoshop is released. With nothing pending this does nothing, and the plug-in clears a stale marker
 /// when the next hand-off starts.
 fn write_cancel_if_pending(dir: &std::path::Path) {
-    if dir.join("handoff.ctrn").exists() && !dir.join("handoff.result.json").exists() {
-        let _ = std::fs::write(dir.join("handoff.cancel"), "");
+    cancel_pending(dir, None);
+}
+
+/// Cancels every hand-off in `dir` that is still waiting for a reply, except the one named `except`
+/// (its `.ctrn` file name). Each hand-off has its own files, so this never touches a finished one.
+fn cancel_pending(dir: &std::path::Path, except: Option<&str>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let Some(base) = name.strip_suffix(".ctrn") else { continue };
+        if except == Some(name.as_str()) || dir.join(format!("{base}.result.json")).exists() {
+            continue;
+        }
+        let _ = std::fs::write(dir.join(format!("{base}.cancel")), "");
     }
+}
+
+/// Called when another image opens: the hand-off still waiting for OK is cancelled, so Photoshop is
+/// released, and the new image's own hand-off is left alone.
+#[tauri::command]
+fn cancel_other_handoffs(except: String) -> Result<(), String> {
+    let home = std::env::var_os("HOME").ok_or("HOME is not set")?;
+    let name = std::path::Path::new(&except).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    cancel_pending(&std::path::Path::new(&home).join("Library/Caches/Citrine"), Some(&name));
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -876,7 +828,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             render_preview, export_image, write_text_file, read_text_file, image_size, render_crop,
             quartz_presets, render_quartz_preview, render_quartz_crop, export_quartz, take_pending_open,
-            render_base_preview, render_base_crop, curve_luts, preset_thumbnail, export_batch
+            render_base_preview, render_base_crop, curve_luts, preset_thumbnail, export_batch, cancel_other_handoffs
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -950,20 +902,6 @@ mod tests {
 
 
 
-    #[test]
-    fn brush_dab_changes_only_its_neighbourhood_in_preview_and_export() {
-        let src = RgbaImage::from_pixel(64, 64, image::Rgba([120, 120, 120, 255]));
-        let mut p = AdjustParams::default();
-        p.brush = vec![BrushDab { kind: 0, x: 0.5, y: 0.5, radius: 0.1, hardness: 0.5, opacity: 1.0, strength: 1.0, group: 1 }];
-        let out = quartz_render(&src, &p);
-        assert!(out.get_pixel(32, 32).0[0] > 120, "dodge should lighten the centre");
-        assert_eq!(out.get_pixel(2, 2).0[0], 120);
-        assert_eq!(out.get_pixel(32, 32).0[3], 255);
-
-        let mut f = RgbImageF32::from_rgb8(&image::DynamicImage::ImageRgba8(src).to_rgb8());
-        apply_brush_rgb(&mut f, &p.brush).unwrap();
-        assert!(f.r[32 * 64 + 32] > f.r[2 * 64 + 2]);
-    }
 
     #[test]
     fn batch_export_writes_each_file_and_reports_failures() {
@@ -981,6 +919,22 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_file(a);
         let _ = std::fs::remove_file(b);
+    }
+
+    /// Timing of the Quartz render at the sizes the app uses. Run: cargo test --release -p appsdesktop bench_render_sizes -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn bench_render_sizes() {
+        let p = AdjustParams::default();
+        let mut p = p;
+        p.adaptive_exposure.adaptive_exposure = 0.5;
+        p.details.strength = 0.3;
+        for (w, h) in [(480u32, 270u32), (960, 540), (3456, 2560)] {
+            let src = RgbaImage::from_fn(w, h, |x, y| image::Rgba([(x % 256) as u8, (y % 256) as u8, 120, 255]));
+            let t0 = std::time::Instant::now();
+            let _ = quartz_base(&src, &p);
+            println!("quartz_base {w}x{h} ({:.1} MP): {} ms", (w * h) as f32 / 1e6, t0.elapsed().as_millis());
+        }
     }
 
     #[test]
@@ -1181,6 +1135,24 @@ mod close_tests {
         let cancelled = dir.join("handoff.cancel").exists();
         let _ = std::fs::remove_dir_all(&dir);
         assert!(cancelled);
+    }
+
+    #[test]
+    fn a_new_handoff_cancels_only_the_waiting_one() {
+        let dir = std::env::temp_dir().join(format!("citrine_two_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("handoff-1.ctrn"), b"CTRN").unwrap();
+        std::fs::write(dir.join("handoff-1.result.json"), b"{}").unwrap();
+        std::fs::write(dir.join("handoff-2.ctrn"), b"CTRN").unwrap();
+        std::fs::write(dir.join("handoff-3.ctrn"), b"CTRN").unwrap();
+        cancel_pending(&dir, Some("handoff-3.ctrn"));
+        let finished = dir.join("handoff-1.cancel").exists();
+        let waiting = dir.join("handoff-2.cancel").exists();
+        let new_one = dir.join("handoff-3.cancel").exists();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(!finished, "a finished hand-off must not be cancelled");
+        assert!(waiting, "the waiting hand-off must be cancelled");
+        assert!(!new_one, "the hand-off being opened must not be cancelled");
     }
 
     #[test]

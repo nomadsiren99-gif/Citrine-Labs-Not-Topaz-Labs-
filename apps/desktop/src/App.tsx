@@ -14,10 +14,6 @@ import { Histogram, Hist } from "./Histogram";
 import { Pt } from "./curveMath";
 import "./App.css";
 
-const BRUSH_KINDS = ["Dodge", "Burn", "Smooth", "Brush out", "Erase"];
-
-// Where a painted dab goes: the brush list, or one layer's mask. emit records one dab at a point.
-type PaintTarget = { radius: number; emit: (p: [number, number], group: number) => void };
 
 type LsPreset = { name: string; category: string; description: string; params: LsParams };
 type State = { sliders: Sliders; ls: LsParams };
@@ -107,19 +103,6 @@ export default function App() {
   const [curveChannel, setCurveChannel] = useState<CurveChannel>("rgb");
   const [openSec, setOpenSec] = useState<Record<string, boolean>>({ basic_exposure: true, adaptive_exposure: true, curve: true });
   const [view, setView] = useState<"single" | "split" | "side">("single");
-  // Brush: dabs live in ls.brush, so they save with the project. Each stroke has a group for undo.
-  const [brushOn, setBrushOn] = useState(false);
-  const [brushKind, setBrushKind] = useState(0);
-  const [brushRadius, setBrushRadius] = useState(0.06);
-  const [brushHardness, setBrushHardness] = useState(0.5);
-  const [brushOpacity, setBrushOpacity] = useState(1);
-  const [brushStrength, setBrushStrength] = useState(0.5);
-  const painting = useRef<{ group: number; last: [number, number]; target: PaintTarget } | null>(null);
-  const brushGroup = useRef(0);
-  // The picture's box inside the fit view (contained and centred), in viewport pixels. Overlay and brush use it.
-  const [fitBox, setFitBox] = useState<{ left: number; top: number; w: number; h: number } | null>(null);
-  // Brush circle under the pointer, in viewport pixels.
-  const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
   const [wipe, setWipe] = useState(0.5);
   const [renderMs, setRenderMs] = useState<number | null>(null);
   const [presetQuery, setPresetQuery] = useState("");
@@ -175,6 +158,9 @@ export default function App() {
   // settings Photoshop last used. Without one (first apply) the defaults are used.
   const handoffBase = (p: string) => p.replace(/\.ctrn$/i, "");
   const openPath = (p: string) => {
+    // A new hand-off ends the one still waiting for OK, so Photoshop is released. Each hand-off has its own
+    // file name, so the preview and zoom caches never show the previous image.
+    if (p.toLowerCase().endsWith(".ctrn")) invoke("cancel_other_handoffs", { except: p }).catch(() => {});
     setPath(p);
     setStatus(`Opened ${p}`);
     if (!p.toLowerCase().endsWith(".ctrn")) return;
@@ -221,15 +207,36 @@ export default function App() {
   }, []);
 
   const shownLs = useMemo(() => (showBefore ? LS_DEFAULT : ls), [showBefore, ls]);
+  // Latest-wins requests: one request per key runs at a time, and while it runs only the newest is kept,
+  // so a slow render never queues up behind older slider positions.
+  const latest = useRef<Record<string, { busy: boolean; next: (() => Promise<void>) | null }>>({});
+  const runLatest = (key: string, job: () => Promise<void>) => {
+    const slot = (latest.current[key] ??= { busy: false, next: null });
+    slot.next = job;
+    if (slot.busy) return;
+    slot.busy = true;
+    void (async () => {
+      while (slot.next) {
+        const run = slot.next;
+        slot.next = null;
+        try {
+          await run();
+        } catch (e) {
+          setStatus(String(e));
+        }
+      }
+      slot.busy = false;
+    })();
+  };
   const gpuOk = !gpuBroken && !showBefore && view === "single" && gpuFinishingOk(ls);
   const pw = useMemo(() => pointwiseFrom(ls), [ls]);
-  const spatialKey = useMemo(() => JSON.stringify([shownLs.basic_exposure, shownLs.adaptive_exposure, shownLs.details, shownLs.noise, shownLs.brush]), [shownLs]);
+  const spatialKey = useMemo(() => JSON.stringify([shownLs.basic_exposure, shownLs.adaptive_exposure, shownLs.details, shownLs.noise]), [shownLs]);
 
-  // Image size when the path changes; the crop centre starts in the middle.
+  // Image size when the path changes; the crop centre starts in the middle and the view starts at Fit.
   useEffect(() => {
     if (!path) return;
     invoke<[number, number, boolean]>("image_size", { path })
-      .then(([w, h, is16]) => { setImageSize([w, h]); setDeep(is16); setCentre([w / 2, h / 2]); })
+      .then(([w, h, is16]) => { setImageSize([w, h]); setDeep(is16); setCentre([w / 2, h / 2]); setZoom("fit"); })
       .catch((e) => setStatus(String(e)));
   }, [path]);
 
@@ -315,7 +322,7 @@ export default function App() {
       const h = Math.min(imageSize[1], Math.ceil((2 * vh) / zoom));
       const x = Math.max(0, Math.min(imageSize[0] - w, Math.round(centre[0] - w / 2)));
       const y = Math.max(0, Math.min(imageSize[1] - h, Math.round(centre[1] - h / 2)));
-      invoke<ArrayBuffer>("render_quartz_crop", { path, params: shownLs, x, y, w, h })
+      runLatest("crop", () => invoke<ArrayBuffer>("render_quartz_crop", { path, params: shownLs, x, y, w, h })
         .then((buf) => {
           // Header: width and height (u32, little-endian), then RGBA rows.
           const head = new DataView(buf);
@@ -328,8 +335,7 @@ export default function App() {
           cropCanvas.current = off;
           cropOrigin.current = [x, y, cw, ch];
           setCropRev((r) => r + 1);
-        })
-        .catch((e) => setStatus(String(e)));
+        }));
     }, 250);
     return () => window.clearTimeout(id);
   }, [zoom, path, imageSize, centre, shownLs, gpuOk]);
@@ -340,7 +346,7 @@ export default function App() {
     if (!getGpu()) return;
     if (baseKind.current === "fit" && baseSpatial.current === spatialKey) return;
     const req = ++baseReq.current;
-    invoke<ArrayBuffer>("render_base_preview", { path, params: shownLs, side: 960 })
+    runLatest("base", () => invoke<ArrayBuffer>("render_base_preview", { path, params: shownLs, side: 960 })
       .then((buf) => {
         if (req !== baseReq.current) return;
         const { w, h, px } = readRaw(buf);
@@ -349,8 +355,7 @@ export default function App() {
         baseKind.current = "fit";
         baseSpatial.current = spatialKey;
         setCropRev((r) => r + 1);
-      })
-      .catch((e) => setStatus(String(e)));
+      }));
   }, [gpuOk, zoom, path, imageSize, spatialKey]);
 
   // GPU base at full resolution for the zoom views: a crop around the centre, fetched when the
@@ -372,7 +377,7 @@ export default function App() {
       const x = Math.max(0, Math.min(imageSize[0] - w, Math.round(centre[0] - w / 2)));
       const y = Math.max(0, Math.min(imageSize[1] - h, Math.round(centre[1] - h / 2)));
       const req = ++baseReq.current;
-      invoke<ArrayBuffer>("render_base_crop", { path, params: shownLs, x, y, w, h })
+      runLatest("base", () => invoke<ArrayBuffer>("render_base_crop", { path, params: shownLs, x, y, w, h })
         .then((buf) => {
           if (req !== baseReq.current) return;
           const { w: cw, h: ch, px } = readRaw(buf);
@@ -381,8 +386,7 @@ export default function App() {
           baseKind.current = "crop";
           baseSpatial.current = spatialKey;
           setCropRev((rv) => rv + 1);
-        })
-        .catch((e) => setStatus(String(e)));
+        }));
     }, 60);
     return () => window.clearTimeout(id);
   }, [gpuOk, zoom, path, imageSize, centre, spatialKey]);
@@ -417,36 +421,21 @@ export default function App() {
     }
   }, [cropRev, centre, zoom, pw, gpuOk, imageSize]);
 
-  // Live preview. While a slider moves, a 480 px draft is shown at once; when it settles (250 ms)
-  // the full 960 px preview replaces it. Only the newest request may update the image, so a late
-  // reply never overwrites a newer one.
-  const previewReq = useRef(0);
-  const lastBaseKey = useRef("");
+  // Live preview (CPU path: split, side and non-GPU views). A 480 px draft shows at once when a setting
+  // changes; the 960 px preview replaces it when the setting settles. The GPU path does not use this image.
   useEffect(() => {
-    if (!path) return;
-    const show = (side: number) => {
-      const id = ++previewReq.current;
+    if (!path || gpuOk) return;
+    const show = (side: number) => runLatest("preview", () => {
       const t0 = performance.now();
       return invoke<string>("render_quartz_preview", { path, params: shownLs, side })
         .then((b64) => {
-          if (id !== previewReq.current) return;
           setPreview(`data:image/png;base64,${b64}`);
           setRenderMs(Math.round(performance.now() - t0));
           setStatus("Preview ready.");
-        })
-        .catch((e) => setStatus(String(e)));
-    };
-    // Brush and layer changes only re-apply masks on a cached base, so they show at once.
-    // Slider changes re-run the pipeline, so they wait for the slider to settle.
-    const baseKey = JSON.stringify({ ...shownLs, brush: undefined });
-    const onlyLayers = baseKey === lastBaseKey.current;
-    lastBaseKey.current = baseKey;
-    if (onlyLayers) {
-      show(960);
-      return;
-    }
-    if (!gpuOk) show(480);
-    const settle = window.setTimeout(() => show(960), gpuOk ? 400 : 250);
+        });
+    });
+    show(480);
+    const settle = window.setTimeout(() => show(960), 220);
     return () => window.clearTimeout(settle);
   }, [path, shownLs, gpuOk]);
 
@@ -686,133 +675,6 @@ export default function App() {
     req.then(() => setStatus(`Exported to ${outPath}`)).catch((e) => setStatus(String(e)));
   };
 
-  // The brush paints in the single view only. Split and side views show the image unpainted.
-
-  useEffect(() => {
-    const el = viewRef.current;
-    if (!el || !imageSize) return;
-    const update = () => {
-      const vw = el.clientWidth;
-      const vh = el.clientHeight;
-      const s = Math.min(vw / imageSize[0], vh / imageSize[1]);
-      const w = imageSize[0] * s;
-      const h = imageSize[1] * s;
-      setFitBox({ left: (vw - w) / 2, top: (vh - h) / 2, w, h });
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [imageSize, zoom, path]);
-
-  // Image-space point (fractions of the image) under the pointer, or null outside the image.
-  const brushPoint = (clientX: number, clientY: number): [number, number] | null => {
-    const el = viewRef.current;
-    if (!el || !imageSize) return null;
-    let fx: number;
-    let fy: number;
-    if (zoom === "fit") {
-      if (!fitBox) return null;
-      const r = el.getBoundingClientRect();
-      fx = (clientX - r.left - fitBox.left) / fitBox.w;
-      fy = (clientY - r.top - fitBox.top) / fitBox.h;
-    } else {
-      if (!centre) return null;
-      const r = el.getBoundingClientRect();
-      fx = (centre[0] + (clientX - (r.left + r.width / 2)) / zoom) / imageSize[0];
-      fy = (centre[1] + (clientY - (r.top + r.height / 2)) / zoom) / imageSize[1];
-    }
-    if (fx < 0 || fy < 0 || fx > 1 || fy > 1) return null;
-    return [fx, fy];
-  };
-
-  const brushTarget = (): PaintTarget => ({
-    radius: brushRadius,
-    emit: (p, group) => setLs((s) => ({
-      ...s,
-      brush: [...s.brush, { kind: brushKind, x: p[0], y: p[1], radius: brushRadius, hardness: brushHardness, opacity: brushOpacity, strength: brushStrength, group }],
-    })),
-  });
-
-  const paintingOn = view === "single" && !!path && brushOn;
-  const activeTarget = (): PaintTarget | null => (brushOn ? brushTarget() : null);
-
-  // Returns false when the press is outside the image, so the caller does not start a pan.
-  const paintStart = (clientX: number, clientY: number) => {
-    const p = brushPoint(clientX, clientY);
-    const target = activeTarget();
-    if (!p || !target) return false;
-    commit();
-    const group = ++brushGroup.current;
-    painting.current = { group, last: p, target };
-    target.emit(p, group);
-    return true;
-  };
-
-  const paintMove = (clientX: number, clientY: number) => {
-    const cur = painting.current;
-    const p = brushPoint(clientX, clientY);
-    if (!cur || !p || !imageSize) return;
-    // Dabs are a quarter of a radius apart, measured in image pixels, so strokes are even in every direction.
-    const dx = (p[0] - cur.last[0]) * imageSize[0];
-    const dy = (p[1] - cur.last[1]) * imageSize[1];
-    if (Math.hypot(dx, dy) < cur.target.radius * Math.min(imageSize[0], imageSize[1]) * 0.25) return;
-    cur.last = p;
-    cur.target.emit(p, cur.group);
-  };
-
-  const paintEnd = () => {
-    painting.current = null;
-  };
-
-  const undoBrushStroke = () => {
-    if (ls.brush.length === 0) return;
-    const last = ls.brush[ls.brush.length - 1].group;
-    commit();
-    setLs((s) => ({ ...s, brush: s.brush.filter((d) => d.group !== last) }));
-  };
-
-  const clearBrush = () => {
-    commit();
-    setLs((s) => ({ ...s, brush: [] }));
-  };
-
-  // Brush circle: the active tool's size as it lands on the picture (fit or zoom scale).
-  const brushCursor = (() => {
-    if (!cursor || !paintingOn || !imageSize) return null;
-    const scale = zoom === "fit" ? (fitBox ? fitBox.w / imageSize[0] : 0) : zoom;
-    if (!scale) return null;
-    const r = brushRadius;
-    const d = 2 * r * Math.min(imageSize[0], imageSize[1]) * scale;
-    const hard = brushHardness;
-    return {
-      style: {
-        left: cursor.x - d / 2, top: cursor.y - d / 2, width: d, height: d,
-        background: `radial-gradient(circle, rgba(255,255,255,0.22) ${hard * 100}%, rgba(255,255,255,0) 100%)`,
-      },
-    };
-  })();
-
-  const trackCursor = (e: { currentTarget: HTMLElement; clientX: number; clientY: number }) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    setCursor({ x: e.clientX - r.left, y: e.clientY - r.top });
-  };
-
-  // Shortcuts: B toggles the brush, [ ] change its size. Ignored while typing in a field.
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey) return;
-      if (e.key.toLowerCase() === "b") {
-        setBrushOn((on) => !on);
-      } else if (e.key === "[" || e.key === "]") {
-        const f = e.key === "]" ? 1.1 : 1 / 1.1;
-        setBrushRadius((r) => Math.min(0.4, Math.max(0.01, r * f)));
-      }
-    };
-    window.addEventListener("keydown", down);
-    return () => window.removeEventListener("keydown", down);
-  }, []);
 
   const batchExport = async () => {
     const files = await open({ multiple: true, filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "tif", "tiff"] }] });
@@ -878,12 +740,27 @@ export default function App() {
   const thumbBusy = useRef(false);
   const pathRef = useRef(path);
   pathRef.current = path;
+  // While the pointer is down (a slider drag, a pan or a paint), thumbnails wait so the preview has the CPU.
+  const pointerDown = useRef(false);
+  useEffect(() => {
+    const down = () => { pointerDown.current = true; };
+    const up = () => { pointerDown.current = false; };
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", up, true);
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", up, true);
+    };
+  }, []);
   const pumpThumbs = async () => {
     if (thumbBusy.current) return;
     thumbBusy.current = true;
     while (thumbQueue.current.length > 0) {
       const job = thumbQueue.current.shift()!;
       if (job.path !== pathRef.current) continue;
+      while (pointerDown.current) await new Promise((r) => setTimeout(r, 150));
       try {
         const b64 = await invoke<string>("preset_thumbnail", { path: job.path, params: job.params });
         setThumbs((t) => ({ ...t, [job.key]: `data:image/png;base64,${b64}` }));
@@ -1002,12 +879,9 @@ export default function App() {
         ) : zoom !== "fit" ? (
           <div className={`viewport crop${spaceHeld ? " hand" : ""}`} ref={viewRef} onDoubleClick={(e) => zoomAt(e.clientX, e.clientY, e.altKey ? 0.5 : 2)}
             onPointerDown={(e) => {
-              if (paintingOn && !spaceHeld) { if (paintStart(e.clientX, e.clientY)) e.currentTarget.setPointerCapture(e.pointerId); return; }
               drag.current = { x: e.clientX, y: e.clientY }; e.currentTarget.setPointerCapture(e.pointerId);
             }}
             onPointerMove={(e) => {
-              trackCursor(e);
-              if (painting.current) { paintMove(e.clientX, e.clientY); return; }
               if (!drag.current || !centre || !imageSize) return;
               const dx = (e.clientX - drag.current.x) / zoom;
               const dy = (e.clientY - drag.current.y) / zoom;
@@ -1030,27 +904,19 @@ export default function App() {
             }}
             onPointerUp={() => {
               drag.current = null;
-              paintEnd();
               if (panCentre.current) { setCentre(panCentre.current); panCentre.current = null; }
-            }}
-            onPointerLeave={() => setCursor(null)}>
+            }}>
             {gpuOk ? <canvas ref={gpuCanvas} className="crop-canvas" /> : <canvas ref={viewCanvas} className="crop-canvas" />}
-            {brushCursor && <div className="brush-cursor" style={brushCursor.style} />}
             {imageSize && centre ? (
               <span className="crop-info">{zoom * 100}% · centre {Math.round(centre[0])}, {Math.round(centre[1])} of {imageSize[0]}×{imageSize[1]} · drag to pan</span>
             ) : null}
           </div>
         ) : (
-          <div className={`viewport zoom-${zoom}`} ref={viewRef} onDoubleClick={(e) => zoomAt(e.clientX, e.clientY, e.altKey ? 0.5 : 2)}
-            onPointerDown={(e) => { if (paintingOn && paintStart(e.clientX, e.clientY)) e.currentTarget.setPointerCapture(e.pointerId); }}
-            onPointerMove={(e) => { trackCursor(e); paintMove(e.clientX, e.clientY); }}
-            onPointerUp={paintEnd}
-            onPointerLeave={() => setCursor(null)}>
+          <div className={`viewport zoom-${zoom}`} ref={viewRef} onDoubleClick={(e) => zoomAt(e.clientX, e.clientY, e.altKey ? 0.5 : 2)}>
             {!path ? welcome : gpuOk && zoom === "fit" ? <canvas ref={gpuCanvas} className="gpu-fit" /> : preview ? (
               <img src={preview} alt="preview"
                 style={zoom === "fit" ? undefined : { width: `${zoom * 100}%`, maxWidth: "none" }} />
             ) : welcome}
-            {brushCursor && <div className="brush-cursor" style={brushCursor.style} />}
           </div>
         )}
         <p className="status">{status}{renderMs !== null ? `  |  preview render ${renderMs} ms` : ""}</p>
@@ -1064,47 +930,6 @@ export default function App() {
           <input type="range" min={0} max={1} step={0.01} value={1 - ls.finishing.transparency}
             onChange={(e) => { commit(); setLs((s) => setLsPath(s, "finishing", "transparency", 1 - Number(e.target.value))); }} />
         </label>
-        <section className="section brush">
-          <header onClick={() => setBrushOn(!brushOn)}>
-            <span>{brushOn ? "▾" : "▸"} Brush</span>
-            <span>
-              <label className="small" onClick={(e) => e.stopPropagation()}>
-                <input type="checkbox" checked={brushOn} onChange={(e) => setBrushOn(e.target.checked)} /> on
-              </label>
-            </span>
-          </header>
-          {brushOn && (
-            <>
-              <label className="slider">
-                <span>Tool</span>
-                <select value={brushKind} onChange={(e) => setBrushKind(Number(e.target.value))}>
-                  {BRUSH_KINDS.map((name, i) => <option key={name} value={i}>{name}</option>)}
-                </select>
-              </label>
-              <label className="slider">
-                <span>Size<em>{Math.round(brushRadius * 100)}</em></span>
-                <input type="range" min={0.01} max={0.4} step={0.005} value={brushRadius} onChange={(e) => setBrushRadius(Number(e.target.value))} />
-              </label>
-              <label className="slider">
-                <span>Hardness<em>{brushHardness.toFixed(2)}</em></span>
-                <input type="range" min={0} max={1} step={0.01} value={brushHardness} onChange={(e) => setBrushHardness(Number(e.target.value))} />
-              </label>
-              <label className="slider">
-                <span>Opacity<em>{brushOpacity.toFixed(2)}</em></span>
-                <input type="range" min={0} max={1} step={0.01} value={brushOpacity} onChange={(e) => setBrushOpacity(Number(e.target.value))} />
-              </label>
-              <label className="slider">
-                <span>Strength<em>{brushStrength.toFixed(2)}</em></span>
-                <input type="range" min={0} max={1} step={0.01} value={brushStrength} onChange={(e) => setBrushStrength(Number(e.target.value))} />
-              </label>
-              <div className="brush-actions">
-                <button onClick={undoBrushStroke} disabled={ls.brush.length === 0}>Undo stroke</button>
-                <button onClick={clearBrush} disabled={ls.brush.length === 0}>Clear brush</button>
-              </div>
-              <p className="small">Paint in the single view. Drag on the image; Space still pans.</p>
-            </>
-          )}
-        </section>
         {mode === "quartz" ? (
           <>
             {LS_SECTIONS.map((sec) => {
